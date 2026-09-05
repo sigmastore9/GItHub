@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCartFromStorage();
   loadShopProducts();
   initLiveSync();
-  initCustomerAuthSession();
 });
 
 // Telegram Notification Configuration
@@ -746,15 +745,6 @@ async function submitCustomerOrder(event) {
     return;
   }
 
-  // Phone Verification Check: Customer must verify phone to prevent fake orders
-  const custSession = getCustomerSession();
-  if (!custSession || !custSession.is_verified || custSession.phone !== customer_phone) {
-    closeCheckoutModal();
-    openAuthModal({ name: customer_name, phone: customer_phone, district, address });
-    showShopToast('لحماية المتجر والتأكد من صحة رقمك، يرجى تأكيد الهاتف برمز التحقق أولاً', 'error');
-    return;
-  }
-
   const totalAmount = shopState.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   let orderNumber = 'SG-' + Math.floor(100000 + Math.random() * 900000);
 
@@ -773,21 +763,6 @@ async function submitCustomerOrder(event) {
       items: shopState.cart,
       totalAmount
     };
-
-    // Record order in customer history database
-    saveCustomerOrderToDB({
-      orderNumber,
-      customer_name,
-      customer_phone,
-      city,
-      district,
-      address,
-      notes,
-      items: JSON.parse(JSON.stringify(shopState.cart)),
-      totalAmount,
-      status: 'pending',
-      created_at: new Date().toISOString()
-    });
 
     // 1. Try local server endpoint if available
     try {
@@ -811,18 +786,20 @@ async function submitCustomerOrder(event) {
         itemsList += `\n${idx + 1}. *${it.model ? `[${it.model}] ` : ''}${it.name}*\n   ▫️ الكمية: ${it.qty} قطعة | السعر: ${formatIQD(it.price * it.qty)}`;
       });
 
+      const phoneIntl = getIraqiPhoneInternational(customer_phone);
       const tgMsg = `🔔 *طلب شراء جديد من متجر Sigma Store!*
 ━━━━━━━━━━━━━━━━━━
 🔢 *رقم الطلب:* #${orderNumber}
 👤 *اسم الزبون:* ${customer_name}
-📞 *رقم الهاتف:* \`${customer_phone}\` (موثق ومؤكد ✓)
+📞 *رقم الهاتف:* \`${customer_phone}\` (${detectCarrier(customer_phone)})
 📍 *الموقع:* ذي قار - ${district} (${address})
 ${notes ? `📝 *ملاحظات:* ${notes}\n` : ''}━━━━━━━━━━━━━━━━━━
 🛒 *المنتجات المطلوبة:*${itemsList}
 ━━━━━━━━━━━━━━━━━━
 💰 *المجموع الكلي:* *${formatIQD(totalAmount)}*
 ⏰ *تاريخ ووقت الطلب:* ${new Date().toLocaleString('ar-IQ')}
-━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━━━━
+💬 [مراسلة الزبون بالواتساب مباشرة](https://wa.me/${phoneIntl}?text=${encodeURIComponent(`مرحباً أخي ${customer_name}، بخصوص طلبك رقم #${orderNumber} من متجر Sigma Store...`)})`;
 
       for (const cid of TG_CONFIG.chatIds) {
         try {

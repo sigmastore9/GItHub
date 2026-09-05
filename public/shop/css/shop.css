@@ -1349,7 +1349,7 @@ body {
   /* Floating Bottom Navigation Bar */
   .mobile-bottom-nav {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     position: fixed;
     bottom: 0;
     left: 0;
