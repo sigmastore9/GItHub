@@ -139,15 +139,19 @@ const upload = multer({ storage });
 // ==========================================
 function exportStaticProductsJson() {
   try {
-    const products = db.prepare('SELECT * FROM products ORDER BY id DESC').all();
-    const settingsRows = db.prepare('SELECT key, value FROM settings').all();
-    const settings = {};
-    settingsRows.forEach(r => settings[r.key] = r.value);
+    const products = db.prepare(`
+      SELECT id, name, model, category, brand, selling_price, stock_quantity, image_url, updated_at
+      FROM products
+      ORDER BY id DESC
+    `).all();
     const data = {
       success: true,
       count: products.length,
       products: products,
-      settings: settings,
+      settings: {
+        store_name: getSetting('store_name') || 'Sigma Store',
+        phone: getSetting('phone') || '07700000000'
+      },
       updated_at: new Date().toISOString()
     };
     const targetPath = path.join(__dirname, '..', 'public', 'shop', 'products.json');

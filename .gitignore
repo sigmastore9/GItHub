@@ -2,6 +2,7 @@ node_modules/
 dist/
 .secure_backups/
 *.log
+*.db
 *.db-shm
 *.db-wal
 *.lnk
