@@ -1122,61 +1122,109 @@ async function handleSendOtp(event) {
   currentOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
   pendingAuthData = { name, phone, district, address };
 
-  const btn = document.getElementById('btnSendOtp');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري إرسال رمز التحقق...';
+  // 1. Switch to OTP screen IMMEDIATELY - Zero waiting / zero delay!
+  document.getElementById('authStepPhone').style.display = 'none';
+  document.getElementById('authStepOtp').style.display = 'block';
+  document.getElementById('otpTargetPhoneDisplay').textContent = phone;
+  
+  // 2. Display Big Readable Code on Screen
+  const bigCodeEl = document.getElementById('otpDisplayBigCode');
+  if (bigCodeEl) {
+    bigCodeEl.textContent = currentOtpCode;
+  }
 
-  // Dispatch OTP notification to Store Telegram Bot
-  try {
-    const otpMsg = `🔐 *طلب رمز تحقق هاتف جديد (OTP)*
+  // 3. Configure WhatsApp Links (Customer & Store)
+  const phoneIntl = getIraqiPhoneInternational(phone);
+  const waCustomerLink = document.getElementById('btnWhatsAppCustomerSelf');
+  if (waCustomerLink) {
+    const custMsg = encodeURIComponent(`🔐 رمز التحقق الخاص بك لتأكيد حسابك في متجر سيجما ستور هو: [ ${currentOtpCode} ]\nرقم الهاتف المسجل: ${phone}\nالمحافظة: ذي قار (${district})`);
+    waCustomerLink.href = `https://wa.me/${phoneIntl}?text=${custMsg}`;
+  }
+
+  const waStoreLink = document.getElementById('btnWhatsAppStoreContact');
+  if (waStoreLink) {
+    const storeMsg = encodeURIComponent(`مرحباً متجر سيجما ستور، أطلب تفعيل حسابي:\n👤 الاسم: ${name}\n📱 رقم الهاتف: ${phone}\n📍 العنوان: ذي قار - ${district} (${address})\n🔑 كود التحقق: ${currentOtpCode}`);
+    waStoreLink.href = `https://wa.me/9647830860919?text=${storeMsg}`;
+  }
+
+  showShopToast(`رمز التحقق السريع هو: ${currentOtpCode}`, 'success');
+  startOtpCountdown();
+  setupOtpInputs();
+
+  // 4. Background Non-Blocking Notification to Telegram & Local Server
+  (async () => {
+    try {
+      const otpMsg = `🔐 *طلب رمز تحقق هاتف جديد (OTP)*
 ━━━━━━━━━━━━━━━━━━
 👤 *الاسم:* ${name}
 📱 *رقم الهاتف:* \`${phone}\` (${detectCarrier(phone)})
 📍 *الموقع:* ذي قار - ${district} (${address})
 🔑 *رمز التحقق (OTP):* \`${currentOtpCode}\`
 ⏰ *صلاحية الرمز:* 5 دقائق
-━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━━━━
+💬 [إرسال الكود للزبون بالواتساب مباشرة](https://wa.me/${phoneIntl}?text=${encodeURIComponent(`مرحباً أخي ${name}، رمز التحقق الخاص بك في متجر سيجما ستور هو: ${currentOtpCode}`)})`;
 
-    for (const cid of TG_CONFIG.chatIds) {
-      await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
+      for (const cid of TG_CONFIG.chatIds) {
+        await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: cid,
+            text: otpMsg,
+            parse_mode: 'Markdown'
+          })
+        });
+      }
+    } catch (err) {
+      console.warn('Telegram OTP dispatch note:', err);
+    }
+
+    try {
+      await fetch('/api/customer/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: cid,
-          text: otpMsg,
-          parse_mode: 'Markdown'
-        })
+        body: JSON.stringify({ phone, name, otp: currentOtpCode, district, address })
       });
-    }
-  } catch (err) {
-    console.warn('Telegram OTP dispatch note:', err);
+    } catch (_) {}
+  })();
+}
+
+// Convert Iraqi phone (e.g. 07830860919) to international (9647830860919) for WhatsApp
+function getIraqiPhoneInternational(phone) {
+  let clean = (phone || '').replace(/\D/g, '');
+  if (clean.startsWith('0')) clean = '964' + clean.substring(1);
+  else if (!clean.startsWith('964')) clean = '964' + clean;
+  return clean;
+}
+
+// One-click WhatsApp code sender from Step 1
+function handleSendOtpWithWhatsApp() {
+  const name = document.getElementById('authCustomerName').value.trim();
+  const phone = document.getElementById('authCustomerPhone').value.trim();
+  if (!name) {
+    showShopToast('يرجى إدخال اسمك أولاً', 'error');
+    return;
   }
-
-  // Try local server endpoint if available
-  try {
-    await fetch('/api/customer/request-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, name, otp: currentOtpCode, district, address })
-    });
-  } catch (_) {}
-
-  btn.disabled = false;
-  btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> إرسال كود التحقق للهاتف (OTP)';
-
-  // Switch to OTP entry step
-  document.getElementById('authStepPhone').style.display = 'none';
-  document.getElementById('authStepOtp').style.display = 'block';
-  document.getElementById('otpTargetPhoneDisplay').textContent = phone;
-  
-  const helperEl = document.getElementById('otpHelperBannerText');
-  if (helperEl) {
-    helperEl.innerHTML = `تم إرسال كود التحقق إلى هاتفك. كود التحقق السريع: <strong style="color:#38bdf8; font-size:16px; letter-spacing:2px; padding:2px 6px; background:rgba(56,189,248,0.15); border-radius:4px;">${currentOtpCode}</strong>`;
+  if (!isValidIraqiPhone(phone)) {
+    showShopToast('يرجى إدخال رقم هاتف عراقي صحيح', 'error');
+    return;
   }
-  showShopToast(`رمز التحقق السريع هو: ${currentOtpCode}`, 'success');
+  handleSendOtp();
+  const phoneIntl = getIraqiPhoneInternational(phone);
+  const waUrl = `https://wa.me/${phoneIntl}?text=${encodeURIComponent(`🔐 رمز التحقق الخاص بك في متجر سيجما ستور هو: [ ${currentOtpCode} ]`)}`;
+  window.open(waUrl, '_blank');
+}
 
-  startOtpCountdown();
-  setupOtpInputs();
+// Auto fill OTP digits and trigger immediate verification
+function autoFillAndVerifyOtp() {
+  if (!currentOtpCode) return;
+  const digits = document.querySelectorAll('.otp-digit');
+  for (let i = 0; i < digits.length && i < currentOtpCode.length; i++) {
+    digits[i].value = currentOtpCode[i];
+  }
+  checkOtpComplete();
+  const fakeEvent = new Event('submit', { cancelable: true });
+  handleVerifyOtp(fakeEvent);
 }
 
 function startOtpCountdown() {
@@ -1202,11 +1250,25 @@ function startOtpCountdown() {
 function resendOtpCode() {
   if (pendingAuthData) {
     currentOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    showShopToast(`تم إرسال رمز تحقق جديد: ${currentOtpCode}`, 'success');
-    const helperEl = document.getElementById('otpHelperBannerText');
-    if (helperEl) {
-      helperEl.innerHTML = `تم تجديد كود التحقق: <strong style="color:#38bdf8; font-size:16px; letter-spacing:2px; padding:2px 6px; background:rgba(56,189,248,0.15); border-radius:4px;">${currentOtpCode}</strong>`;
+    const bigCodeEl = document.getElementById('otpDisplayBigCode');
+    if (bigCodeEl) {
+      bigCodeEl.textContent = currentOtpCode;
     }
+
+    const phoneIntl = getIraqiPhoneInternational(pendingAuthData.phone);
+    const waCustomerLink = document.getElementById('btnWhatsAppCustomerSelf');
+    if (waCustomerLink) {
+      const custMsg = encodeURIComponent(`🔐 رمز التحقق الجديد لتأكيد حسابك في متجر سيجما ستور هو: [ ${currentOtpCode} ]`);
+      waCustomerLink.href = `https://wa.me/${phoneIntl}?text=${custMsg}`;
+    }
+
+    const waStoreLink = document.getElementById('btnWhatsAppStoreContact');
+    if (waStoreLink) {
+      const storeMsg = encodeURIComponent(`مرحباً متجر سيجما ستور، أطلب تفعيل حسابي بكود جديد:\n👤 ${pendingAuthData.name} (${pendingAuthData.phone})\n🔑 رمز التحقق: ${currentOtpCode}`);
+      waStoreLink.href = `https://wa.me/9647830860919?text=${storeMsg}`;
+    }
+
+    showShopToast(`تم تجديد رمز التحقق: ${currentOtpCode}`, 'success');
     startOtpCountdown();
     setupOtpInputs();
   }

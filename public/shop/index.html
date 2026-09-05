@@ -430,6 +430,10 @@
           <button type="submit" class="btn-primary-auth w-100" id="btnSendOtp">
             <i class="fa-solid fa-paper-plane"></i> إرسال كود التحقق للهاتف (OTP)
           </button>
+          <div class="auth-divider-text my-2"><span>أو التحقق عبر واتساب</span></div>
+          <button type="button" class="btn-whatsapp-auth-direct w-100" onclick="handleSendOtpWithWhatsApp()">
+            <i class="fa-brands fa-whatsapp"></i> استلام كود التحقق عبر تطبيق واتساب
+          </button>
         </form>
       </div>
 
@@ -437,18 +441,40 @@
       <div id="authStepOtp" style="display:none;">
         <div class="auth-header text-center">
           <div class="auth-icon-circle otp-icon-pulse">
-            <i class="fa-solid fa-key text-gold"></i>
+            <i class="fa-solid fa-shield-halved text-gold"></i>
           </div>
-          <h2>إدخال رمز التحقق الأمني</h2>
-          <p class="text-muted">تم إرسال رمز التحقق المكون من 6 أرقام إلى هاتفك <strong id="otpTargetPhoneDisplay" class="text-cyan">078XXXXXXX</strong></p>
+          <h2>تأكيد كود التحقق</h2>
+          <p class="text-muted">تم تجهيز كود الأمان للرقم <strong id="otpTargetPhoneDisplay" class="text-cyan">078XXXXXXX</strong></p>
         </div>
 
-        <div class="otp-alert-box" id="otpHelperBanner">
-          <i class="fa-solid fa-shield-check text-cyan"></i>
-          <span id="otpHelperBannerText">وصلك كود التحقق عبر إشعار البوت أو SMS. أدخل الأرقام الستة:</span>
+        <!-- Big Highlight Code Showcase -->
+        <div class="otp-showcase-box">
+          <div class="otp-showcase-label">
+            <i class="fa-solid fa-key text-gold"></i> كود التحقق الخاص بك هو:
+          </div>
+          <div class="otp-showcase-code" id="otpDisplayBigCode">
+            ------
+          </div>
+          <button type="button" class="btn-autofill-otp" onclick="autoFillAndVerifyOtp()">
+            <i class="fa-solid fa-bolt-lightning"></i> إدخال الكود وتأكيد الحساب فوراً
+          </button>
+        </div>
+
+        <!-- WhatsApp Delivery Actions -->
+        <div class="otp-whatsapp-actions mt-3">
+          <div class="otp-whatsapp-title">
+            <i class="fa-brands fa-whatsapp text-success"></i> خيارات إرسال الكود عبر واتساب:
+          </div>
+          <a id="btnWhatsAppCustomerSelf" href="#" target="_blank" class="btn-wa-link btn-wa-self">
+            <i class="fa-brands fa-whatsapp"></i> فتح واستلام الكود في واتساب هاتفك
+          </a>
+          <a id="btnWhatsAppStoreContact" href="#" target="_blank" class="btn-wa-link btn-wa-store">
+            <i class="fa-brands fa-whatsapp"></i> تأكيد الكود مع واتساب المتجر (07830860919)
+          </a>
         </div>
 
         <form id="authOtpForm" onsubmit="handleVerifyOtp(event)" class="mt-3">
+          <label class="d-block text-center text-muted mb-2" style="font-size: 13px;">أو أدخل الأرقام الستة يدوياً:</label>
           <div class="otp-input-row" dir="ltr">
             <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off">
             <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off">
