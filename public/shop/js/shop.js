@@ -21,13 +21,47 @@ document.addEventListener('DOMContentLoaded', () => {
   initLiveSync();
 });
 
-// Dynamic Store Settings Sync with Backend DB
+// Telegram Notification Configuration
+const TG_CONFIG = {
+  token: '8751504494:AAFQhkPA4lX2rFNKDVsdziD1-td03hfgD48',
+  chatIds: ['1390419753'] // Mohammed + friend can be added
+};
+
+// Dynamic Asset URL Resolver for GitHub Pages & Local
+function resolveAssetUrl(url) {
+  if (!url) return 'images/products/eq33.jpg';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+  
+  const pathname = window.location.pathname;
+  let prefix = '';
+  if (pathname.includes('/public/shop')) {
+    prefix = pathname.substring(0, pathname.indexOf('/public/shop'));
+  }
+  const cleanUrl = url.startsWith('/') ? url : '/' + url;
+  return `${prefix}${cleanUrl}`;
+}
+
+// Dynamic Store Settings Sync with Backend DB (with GitHub Pages fallback)
 async function loadStoreSettings() {
   try {
-    const res = await fetch('/api/settings');
-    const data = await res.json();
-    if (data.success && data.settings) {
-      const s = data.settings;
+    let s = null;
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.settings) s = data.settings;
+      }
+    } catch (_) {}
+
+    if (!s) {
+      try {
+        const res = await fetch(`products.json?_t=${Date.now()}`);
+        const data = await res.json();
+        if (data && data.settings) s = data.settings;
+      } catch (_) {}
+    }
+
+    if (s) {
       if (s.store_name) {
         document.querySelectorAll('.brand-title').forEach(el => el.textContent = s.store_name);
         document.title = `${s.store_name} - الإلكترونيات والملحقات الأصلية`;
@@ -106,7 +140,7 @@ function getProductDescription(product) {
   return `منتج أصلي معتمد من ماركة ${brand} بجودة تصنيع ممتازة وكفالة ضد عيوب المصنع.`;
 }
 
-// 1. Fetch & Render Products (Supports Silent Live Sync)
+// 1. Fetch & Render Products (Supports Silent Live Sync & GitHub Pages fallback)
 async function loadShopProducts(isSilent = false) {
   const loading = document.getElementById('shopLoading');
   const empty = document.getElementById('shopEmpty');
@@ -119,11 +153,23 @@ async function loadShopProducts(isSilent = false) {
   }
 
   try {
-    const res = await fetch(`/api/products?_t=${Date.now()}`);
-    const data = await res.json();
+    let data = null;
+    try {
+      const res = await fetch(`/api/products?_t=${Date.now()}`);
+      if (res.ok) {
+        data = await res.json();
+      }
+    } catch (_) {}
+
+    // Fallback for static GitHub Pages hosting
+    if (!data || !data.products) {
+      const res = await fetch(`products.json?_t=${Date.now()}`);
+      data = await res.json();
+    }
+
     if (!isSilent) loading.style.display = 'none';
 
-    if (data.success && data.products) {
+    if (data && data.success && data.products) {
       shopState.products = data.products;
       applyShopFilters(isSilent);
       syncHeroBanner(data.products);
@@ -190,10 +236,11 @@ function renderShopProductsGrid(isSilent = false) {
   const fragment = document.createDocumentFragment();
 
   shopState.filteredProducts.forEach(p => {
-    const fallbackImg = '/images/products/eq33.jpg';
+    const fallbackImg = resolveAssetUrl('/images/products/eq33.jpg');
     // Append updated_at timestamp to bust browser cache immediately upon image change!
     const v = p.updated_at ? encodeURIComponent(p.updated_at) : Date.now();
-    const imgSrc = p.image_url ? (p.image_url.includes('?') ? p.image_url : `${p.image_url}?v=${v}`) : fallbackImg;
+    const rawImg = p.image_url ? (p.image_url.includes('?') ? p.image_url : `${p.image_url}?v=${v}`) : fallbackImg;
+    const imgSrc = resolveAssetUrl(rawImg);
     const isAvailable = (p.stock_quantity !== undefined && p.stock_quantity !== null) ? p.stock_quantity > 0 : true;
 
     const card = document.createElement('div');
@@ -672,8 +719,11 @@ async function submitCustomerOrder(event) {
     return;
   }
 
+  const totalAmount = shopState.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  let orderNumber = 'SG-' + Math.floor(100000 + Math.random() * 900000);
+
   btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري إرسال الطلب...';
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري إرسال وتأكيد الطلب...';
 
   try {
     const payload = {
@@ -685,39 +735,84 @@ async function submitCustomerOrder(event) {
       items: shopState.cart
     };
 
-    const res = await fetch('/api/shop/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    // 1. Try local server endpoint if available
+    try {
+      const res = await fetch('/api/shop/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.orderNumber) {
+          orderNumber = data.orderNumber;
+        }
+      }
+    } catch (_) {}
 
-    const data = await res.json();
+    // 2. Send instant Telegram Notification to Mohammed & team
+    try {
+      let itemsList = '';
+      shopState.cart.forEach((it, idx) => {
+        itemsList += `\n${idx + 1}. *${it.model ? `[${it.model}] ` : ''}${it.name}*\n   ▫️ الكمية: ${it.qty} قطعة | السعر: ${formatIQD(it.price * it.qty)}`;
+      });
+
+      const tgMsg = `🔔 *طلب شراء جديد من متجر Sigma Store!*
+━━━━━━━━━━━━━━━━━━
+🔢 *رقم الطلب:* #${orderNumber}
+👤 *اسم الزبون:* ${customer_name}
+📞 *رقم الهاتف:* \`${customer_phone}\`
+📍 *الموقع:* ${city} - ${address}
+${notes ? `📝 *ملاحظات:* ${notes}\n` : ''}━━━━━━━━━━━━━━━━━━
+🛒 *المنتجات المطلوبة:*${itemsList}
+━━━━━━━━━━━━━━━━━━
+💰 *المجموع الكلي:* *${formatIQD(totalAmount)}*
+⏰ *تاريخ ووقت الطلب:* ${new Date().toLocaleString('ar-IQ')}
+━━━━━━━━━━━━━━━━━━`;
+
+      for (const cid of TG_CONFIG.chatIds) {
+        try {
+          await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: cid,
+              text: tgMsg,
+              parse_mode: 'Markdown'
+            })
+          });
+        } catch (e) {
+          console.warn('Telegram notification failed for chat:', cid, e);
+        }
+      }
+    } catch (e) {
+      console.warn('Telegram process error:', e);
+    }
+
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-check"></i> تأكيد وإرسال الطلب';
 
-    if (data.success) {
-      closeCheckoutModal();
-      clearFullCart();
-      
-      // Open Success Modal
-      document.getElementById('successOrderRef').textContent = `#${data.orderNumber}`;
-      document.getElementById('successOrderTotal').textContent = `المبلغ الكلي: ${formatIQD(data.totalAmount)}`;
-      
-      // WhatsApp message link
-      const storeName = document.querySelector('.brand-title')?.textContent || 'MY Store';
-      const msg = encodeURIComponent(`مرحباً ${storeName}، قمت بتأكيد طلب جديد رقم #${data.orderNumber} باسم (${customer_name}) بقيمة (${formatIQD(data.totalAmount)}).`);
-      const defaultWa = document.getElementById('btnWhatsAppContact').getAttribute('href') || 'https://wa.me/9647700000000';
-      const cleanWaBase = defaultWa.split('?')[0];
-      document.getElementById('btnWhatsAppContact').href = `${cleanWaBase}?text=${msg}`;
+    // 3. Complete order flow on client
+    closeCheckoutModal();
+    clearFullCart();
+    
+    // Open Success Modal
+    document.getElementById('successOrderRef').textContent = `#${orderNumber}`;
+    document.getElementById('successOrderTotal').textContent = `المبلغ الكلي: ${formatIQD(totalAmount)}`;
+    
+    // WhatsApp message link
+    const storeName = document.querySelector('.brand-title')?.textContent || 'Sigma Store';
+    const msg = encodeURIComponent(`مرحباً ${storeName}، قمت بتأكيد طلب جديد رقم #${orderNumber} باسم (${customer_name}) بقيمة (${formatIQD(totalAmount)}).`);
+    const defaultWa = document.getElementById('btnWhatsAppContact')?.getAttribute('href') || 'https://wa.me/9647700000000';
+    const cleanWaBase = defaultWa.split('?')[0];
+    const btnWa = document.getElementById('btnWhatsAppContact');
+    if (btnWa) btnWa.href = `${cleanWaBase}?text=${msg}`;
 
-      document.getElementById('orderSuccessModal').style.display = 'flex';
-    } else {
-      showShopToast(data.message || 'فشل في إرسال الطلب', 'error');
-    }
+    document.getElementById('orderSuccessModal').style.display = 'flex';
   } catch (error) {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-check"></i> تأكيد وإرسال الطلب';
-    showShopToast('حدث خطأ أثناء الاتصال بالخادم', 'error');
+    showShopToast('حدث خطأ أثناء معالجة الطلب', 'error');
   }
 }
 

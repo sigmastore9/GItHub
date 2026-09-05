@@ -117,6 +117,66 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // ==========================================
+// TELEGRAM NOTIFICATIONS & STATIC JSON SYNC
+// ==========================================
+function exportStaticProductsJson() {
+  try {
+    const products = db.prepare('SELECT * FROM products ORDER BY id DESC').all();
+    const settingsRows = db.prepare('SELECT key, value FROM settings').all();
+    const settings = {};
+    settingsRows.forEach(r => settings[r.key] = r.value);
+    const data = {
+      success: true,
+      count: products.length,
+      products: products,
+      settings: settings,
+      updated_at: new Date().toISOString()
+    };
+    const targetPath = path.join(__dirname, '..', 'public', 'shop', 'products.json');
+    fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error exporting static products.json:', e);
+  }
+}
+
+async function sendTelegramProductAlert(prod) {
+  try {
+    const token = getSetting('telegram_bot_token') || '8751504494:AAFQhkPA4lX2rFNKDVsdziD1-td03hfgD48';
+    const chatIdsStr = getSetting('telegram_chat_ids') || '1390419753';
+    const chatIds = chatIdsStr.split(',').map(s => s.trim()).filter(Boolean);
+
+    const priceFmt = (Math.round(prod.selling_price || 0)).toLocaleString('en-US') + ' د.ع';
+    const text = `✨ *إضافة منتج جديد في Sigma Store!*
+━━━━━━━━━━━━━━━━━━
+📦 *الاسم:* ${prod.name}
+🏷️ *الموديل:* ${prod.model || 'غير محدد'}
+📁 *القسم:* ${prod.category || 'عام'}
+🏷️ *الماركة:* ${prod.brand || 'Hoco'}
+💰 *سعر البيع:* *${priceFmt}*
+📊 *الكمية الأولية:* ${prod.stock_quantity || 0} قطعة
+⏰ *الوقت:* ${new Date().toLocaleString('ar-IQ')}
+━━━━━━━━━━━━━━━━━━`;
+
+    for (const cid of chatIds) {
+      fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: cid,
+          text: text,
+          parse_mode: 'Markdown'
+        })
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Failed to dispatch telegram product alert:', err);
+  }
+}
+
+// Initial export on startup
+exportStaticProductsJson();
+
+// ==========================================
 // 1. PRODUCTS & INVENTORY API
 // ==========================================
 
@@ -211,6 +271,16 @@ app.post('/api/products', (req, res) => {
       barcode || `PRD-${Date.now()}`,
       notes || ''
     );
+
+    exportStaticProductsJson();
+    sendTelegramProductAlert({
+      name: name || 'منتج جديد',
+      model: model || '',
+      category: category || 'أخرى',
+      brand: brand || 'Hoco',
+      selling_price: selling,
+      stock_quantity: totalQty
+    });
 
     res.json({ success: true, id: result.lastInsertRowid, message: 'تمت إضافة المنتج بنجاح' });
   } catch (error) {
