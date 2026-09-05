@@ -146,6 +146,18 @@ function initDatabase() {
       FOREIGN KEY (debt_id) REFERENCES debts(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      phone TEXT UNIQUE NOT NULL,
+      province TEXT DEFAULT 'ذي قار',
+      district TEXT DEFAULT 'الناصرية',
+      address TEXT,
+      is_verified INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_products_model ON products(model);
     CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
     CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
@@ -158,6 +170,8 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_software_ticket ON software_services(ticket_number);
     CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
     CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+    CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(customer_phone);
+    CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
     CREATE INDEX IF NOT EXISTS idx_debts_customer ON debts(customer_name);
     CREATE INDEX IF NOT EXISTS idx_debts_status ON debts(status);
     CREATE INDEX IF NOT EXISTS idx_debt_payments_debt_id ON debt_payments(debt_id);
@@ -168,7 +182,6 @@ function initDatabase() {
     db.exec(`ALTER TABLE sales ADD COLUMN payment_type TEXT DEFAULT 'cash';`);
   } catch(e) {}
 
-  // Auto-migrate new columns if missing in existing DB
   try {
     db.exec(`ALTER TABLE repairs ADD COLUMN loss_cost REAL DEFAULT 0;`);
   } catch(e) {}
@@ -177,6 +190,15 @@ function initDatabase() {
   } catch(e) {}
   try {
     db.exec(`ALTER TABLE sales ADD COLUMN discount REAL DEFAULT 0;`);
+  } catch(e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN district TEXT DEFAULT 'الناصرية';`);
+  } catch(e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN cancelled_at DATETIME;`);
+  } catch(e) {}
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN cancelled_by TEXT;`);
   } catch(e) {}
 
   // Default settings for Sigma Store

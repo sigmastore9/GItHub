@@ -1613,23 +1613,38 @@ app.post('/api/shop/orders', (req, res) => {
     });
 
     const result = runTransaction(() => {
+      const district = (req.body.district || 'الناصرية').trim();
       const orderStmt = db.prepare(`
         INSERT INTO orders (
-          order_number, customer_name, customer_phone, city, address, notes,
+          order_number, customer_name, customer_phone, city, district, address, notes,
           items_json, total_amount, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
       `);
 
       const orderRes = orderStmt.run(
         orderNumber,
         customer_name.trim(),
         customer_phone.trim(),
-        city || 'بغداد',
-        address || 'استلام من المحل / توصيل للمنزل',
+        'ذي قار',
+        district,
+        address || 'توصيل للمنزل داخل محافظة ذي قار',
         notes || '',
         JSON.stringify(validatedItems),
         calculatedTotal
       );
+
+      // Auto-upsert into customers table
+      try {
+        db.prepare(`
+          INSERT INTO customers (name, phone, province, district, address, is_verified, updated_at)
+          VALUES (?, ?, 'ذي قار', ?, ?, 1, CURRENT_TIMESTAMP)
+          ON CONFLICT(phone) DO UPDATE SET
+            name = excluded.name,
+            district = excluded.district,
+            address = excluded.address,
+            updated_at = CURRENT_TIMESTAMP
+        `).run(customer_name.trim(), customer_phone.trim(), district, address || '');
+      } catch(e) {}
 
       // Decrement stock for ordered items
       for (const item of validatedItems) {
@@ -1655,6 +1670,138 @@ app.post('/api/shop/orders', (req, res) => {
   } catch (error) {
     console.error('Error placing online customer order:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==========================================
+// CUSTOMER AUTH, PHONE VERIFICATION & PORTAL API
+// ==========================================
+
+const activeOtps = new Map();
+
+// Request OTP endpoint
+app.post('/api/customer/request-otp', (req, res) => {
+  try {
+    const { phone, name, district, address, otp } = req.body;
+    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const code = otp || Math.floor(100000 + Math.random() * 900000).toString();
+    
+    activeOtps.set(cleanPhone, {
+      code,
+      name: name || '',
+      district: district || 'الناصرية',
+      address: address || '',
+      expiresAt: Date.now() + 5 * 60 * 1000
+    });
+
+    console.log(`[Customer OTP] Code generated for ${cleanPhone}: ${code}`);
+    res.json({ success: true, message: 'تم إرسال كود التحقق بنجاح', debugOtp: code });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Register or update verified customer
+app.post('/api/customer/register', (req, res) => {
+  try {
+    const { name, phone, district, address, is_verified } = req.body;
+    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    if (!cleanPhone || !name) {
+      return res.status(400).json({ success: false, message: 'الاسم ورقم الهاتف مطلوبان' });
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO customers (name, phone, province, district, address, is_verified, updated_at)
+      VALUES (?, ?, 'ذي قار', ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(phone) DO UPDATE SET
+        name = excluded.name,
+        district = excluded.district,
+        address = excluded.address,
+        is_verified = excluded.is_verified,
+        updated_at = CURRENT_TIMESTAMP
+    `);
+
+    stmt.run(name.trim(), cleanPhone, district || 'الناصرية', address || '', is_verified ? 1 : 0);
+    const customer = db.prepare('SELECT * FROM customers WHERE phone = ?').get(cleanPhone);
+    res.json({ success: true, customer });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Customer login by phone
+app.post('/api/customer/login', (req, res) => {
+  try {
+    const { phone } = req.body;
+    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const customer = db.prepare('SELECT * FROM customers WHERE phone = ?').get(cleanPhone);
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'رقم الهاتف غير مسجل' });
+    }
+    res.json({ success: true, customer });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Update customer profile
+app.put('/api/customer/profile', (req, res) => {
+  try {
+    const { name, phone, district, address } = req.body;
+    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    db.prepare(`
+      UPDATE customers SET
+        name = ?, district = ?, address = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE phone = ?
+    `).run(name.trim(), district || 'الناصرية', address || '', cleanPhone);
+
+    const customer = db.prepare('SELECT * FROM customers WHERE phone = ?').get(cleanPhone);
+    res.json({ success: true, customer });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Get customer orders by phone
+app.get('/api/customer/orders', (req, res) => {
+  try {
+    const { phone } = req.query;
+    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const orders = db.prepare('SELECT * FROM orders WHERE customer_phone = ? ORDER BY id DESC').all(cleanPhone);
+    const formatted = orders.map(o => ({
+      ...o,
+      orderNumber: o.order_number,
+      totalAmount: o.total_amount,
+      items: JSON.parse(o.items_json || '[]')
+    }));
+    res.json({ success: true, orders: formatted });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Customer cancels order
+app.post('/api/customer/cancel-order', (req, res) => {
+  try {
+    const { orderNumber, phone } = req.body;
+    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const order = db.prepare('SELECT * FROM orders WHERE order_number = ?').get(orderNumber);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
+    }
+    if (order.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'لا يمكن إلغاء الطلب لأنه قيد المعالجة أو تم شحنه بالفعل' });
+    }
+
+    db.prepare(`
+      UPDATE orders SET
+        status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP, cancelled_by = 'customer'
+      WHERE order_number = ?
+    `).run(orderNumber);
+
+    res.json({ success: true, message: 'تم إلغاء الطلب بنجاح' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

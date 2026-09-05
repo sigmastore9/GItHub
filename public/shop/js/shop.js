@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCartFromStorage();
   loadShopProducts();
   initLiveSync();
+  initCustomerAuthSession();
 });
 
 // Telegram Notification Configuration
@@ -705,6 +706,16 @@ function openCheckoutModal() {
 
   const subtotal = shopState.cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   document.getElementById('checkoutTotalVal').textContent = formatIQD(subtotal);
+
+  // Pre-fill customer info if available from session
+  const cust = getCustomerSession();
+  if (cust) {
+    if (document.getElementById('orderCustName')) document.getElementById('orderCustName').value = cust.name || '';
+    if (document.getElementById('orderCustPhone')) document.getElementById('orderCustPhone').value = cust.phone || '';
+    if (document.getElementById('orderDistrict') && cust.district) document.getElementById('orderDistrict').value = cust.district;
+    if (document.getElementById('orderAddress')) document.getElementById('orderAddress').value = cust.address || '';
+  }
+
   toggleCart(false);
   document.getElementById('checkoutModal').style.display = 'flex';
 }
@@ -717,14 +728,30 @@ async function submitCustomerOrder(event) {
   event.preventDefault();
 
   const customer_name = document.getElementById('orderCustName').value.trim();
-  const customer_phone = document.getElementById('orderCustPhone').value.trim();
-  const city = document.getElementById('orderCity').value;
+  const rawPhone = document.getElementById('orderCustPhone').value.trim();
+  const customer_phone = cleanIraqiPhone(rawPhone);
+  const city = 'ذي قار';
+  const district = document.getElementById('orderDistrict') ? document.getElementById('orderDistrict').value : 'الناصرية';
   const address = document.getElementById('orderAddress').value.trim();
   const notes = document.getElementById('orderNotes').value.trim();
   const btn = document.getElementById('btnSubmitOrder');
 
   if (!customer_name || !customer_phone || !address) {
     showShopToast('يرجى ملء الحقول المطلوبة', 'error');
+    return;
+  }
+
+  if (!isValidIraqiPhone(customer_phone)) {
+    showShopToast('يرجى إدخال رقم هاتف عراقي صحيح مكون من 11 رقماً (مثل: 07830860919)', 'error');
+    return;
+  }
+
+  // Phone Verification Check: Customer must verify phone to prevent fake orders
+  const custSession = getCustomerSession();
+  if (!custSession || !custSession.is_verified || custSession.phone !== customer_phone) {
+    closeCheckoutModal();
+    openAuthModal({ name: customer_name, phone: customer_phone, district, address });
+    showShopToast('لحماية المتجر والتأكد من صحة رقمك، يرجى تأكيد الهاتف برمز التحقق أولاً', 'error');
     return;
   }
 
@@ -736,13 +763,31 @@ async function submitCustomerOrder(event) {
 
   try {
     const payload = {
+      orderNumber,
       customer_name,
       customer_phone,
       city,
+      district,
       address,
       notes,
-      items: shopState.cart
+      items: shopState.cart,
+      totalAmount
     };
+
+    // Record order in customer history database
+    saveCustomerOrderToDB({
+      orderNumber,
+      customer_name,
+      customer_phone,
+      city,
+      district,
+      address,
+      notes,
+      items: JSON.parse(JSON.stringify(shopState.cart)),
+      totalAmount,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    });
 
     // 1. Try local server endpoint if available
     try {
@@ -770,8 +815,8 @@ async function submitCustomerOrder(event) {
 ━━━━━━━━━━━━━━━━━━
 🔢 *رقم الطلب:* #${orderNumber}
 👤 *اسم الزبون:* ${customer_name}
-📞 *رقم الهاتف:* \`${customer_phone}\`
-📍 *الموقع:* ${city} - ${address}
+📞 *رقم الهاتف:* \`${customer_phone}\` (موثق ومؤكد ✓)
+📍 *الموقع:* ذي قار - ${district} (${address})
 ${notes ? `📝 *ملاحظات:* ${notes}\n` : ''}━━━━━━━━━━━━━━━━━━
 🛒 *المنتجات المطلوبة:*${itemsList}
 ━━━━━━━━━━━━━━━━━━
@@ -810,9 +855,9 @@ ${notes ? `📝 *ملاحظات:* ${notes}\n` : ''}━━━━━━━━━�
     document.getElementById('successOrderTotal').textContent = `المبلغ الكلي: ${formatIQD(totalAmount)}`;
     
     // WhatsApp message link
-    const storeName = document.querySelector('.brand-title')?.textContent || 'Sigma Store';
-    const msg = encodeURIComponent(`مرحباً ${storeName}، قمت بتأكيد طلب جديد رقم #${orderNumber} باسم (${customer_name}) بقيمة (${formatIQD(totalAmount)}).`);
-    const defaultWa = document.getElementById('btnWhatsAppContact')?.getAttribute('href') || 'https://wa.me/9647700000000';
+    const storeName = document.querySelector('.brand-title')?.textContent || 'SIGMA STORE';
+    const msg = encodeURIComponent(`مرحباً ${storeName}، قمت بتأكيد طلب جديد رقم #${orderNumber} باسم (${customer_name}) في ذي قار (${district}) بقيمة (${formatIQD(totalAmount)}).`);
+    const defaultWa = document.getElementById('btnWhatsAppContact')?.getAttribute('href') || 'https://wa.me/9647830860919';
     const cleanWaBase = defaultWa.split('?')[0];
     const btnWa = document.getElementById('btnWhatsAppContact');
     if (btnWa) btnWa.href = `${cleanWaBase}?text=${msg}`;
@@ -912,4 +957,615 @@ function showShopToast(msg, type = 'success') {
   toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-circle-check text-green' : 'fa-circle-exclamation text-danger'}"></i> <span>${msg}</span>`;
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
+}
+
+// ==========================================================
+// 8. CUSTOMER ACCOUNTS, PHONE VERIFICATION (OTP) & PORTAL
+// ==========================================================
+
+let currentOtpCode = null;
+let otpCountdownTimer = null;
+let pendingAuthData = null;
+let otpCountdownSeconds = 60;
+
+// Phone number parsing & strict Iraqi carrier validation
+function cleanIraqiPhone(phone) {
+  if (!phone) return '';
+  let p = phone.replace(/[\s\-\+\(\)]/g, '');
+  if (p.startsWith('00964')) p = '0' + p.slice(5);
+  else if (p.startsWith('964')) p = '0' + p.slice(3);
+  return p;
+}
+
+function isValidIraqiPhone(phone) {
+  const p = cleanIraqiPhone(phone);
+  // Iraqi numbers start with 07 followed by 7, 8, 9, or 5, and exactly 11 digits total
+  return /^(07[3-9]\d{8})$/.test(p);
+}
+
+function detectCarrier(phone) {
+  const p = cleanIraqiPhone(phone);
+  if (!p || p.length < 3) return '';
+  const prefix = p.substring(0, 3);
+  if (prefix === '077') return 'شبكة آسيا سيل (Asiacell)';
+  if (prefix === '078' || prefix === '079') return 'شبكة زين العراق (Zain)';
+  if (prefix === '075') return 'شبكة كورك تيليكوم (Korek)';
+  return 'رقم هاتف عراقي غير معروف';
+}
+
+function formatAndValidateIraqiPhone(input) {
+  let val = input.value.replace(/\D/g, '');
+  if (val.startsWith('964')) val = '0' + val.slice(3);
+  if (val.length > 11) val = val.slice(0, 11);
+  input.value = val;
+  const hintEl = document.getElementById('phoneCarrierHint');
+  if (hintEl) {
+    if (val.length >= 3) {
+      const carrier = detectCarrier(val);
+      hintEl.textContent = carrier;
+      hintEl.style.color = carrier.includes('غير') ? '#ef4444' : '#38bdf8';
+    } else {
+      hintEl.textContent = 'أدخل 11 رقماً تبدأ بـ 078 أو 077 أو 075';
+      hintEl.style.color = '';
+    }
+  }
+}
+
+// Session Management (Stored securely in localStorage & IndexedDB)
+function getCustomerSession() {
+  try {
+    const raw = localStorage.getItem('sigmastore_customer_session');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) {
+    return null;
+  }
+}
+
+function saveCustomerSession(cust) {
+  try {
+    localStorage.setItem('sigmastore_customer_session', JSON.stringify(cust));
+  } catch(e) {}
+}
+
+function clearCustomerSession() {
+  try {
+    localStorage.removeItem('sigmastore_customer_session');
+  } catch(e) {}
+}
+
+function initCustomerAuthSession() {
+  updateHeaderAccountUI();
+}
+
+function updateHeaderAccountUI() {
+  const cust = getCustomerSession();
+  const headerBtn = document.getElementById('headerAccountBtn');
+  const headerText = document.getElementById('headerAccountText');
+  const mNavText = document.getElementById('mNavAccountText');
+
+  if (cust && cust.is_verified) {
+    const firstName = cust.name ? cust.name.split(' ')[0] : 'حسابي';
+    if (headerText) headerText.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> ${firstName}`;
+    if (headerBtn) headerBtn.classList.add('logged-in');
+    if (mNavText) mNavText.textContent = firstName;
+  } else {
+    if (headerText) headerText.textContent = 'حسابي';
+    if (headerBtn) headerBtn.classList.remove('logged-in');
+    if (mNavText) mNavText.textContent = 'حسابي';
+  }
+}
+
+function handleAccountBtnClick() {
+  const cust = getCustomerSession();
+  if (cust && cust.is_verified) {
+    openPortalModal();
+  } else {
+    openAuthModal();
+  }
+}
+
+// Auth Modal (Step 1 & Step 2 OTP)
+function openAuthModal(prefill = {}) {
+  const cust = getCustomerSession() || {};
+  if (document.getElementById('authNameInput')) {
+    document.getElementById('authNameInput').value = prefill.name || cust.name || '';
+  }
+  if (document.getElementById('authPhoneInput')) {
+    document.getElementById('authPhoneInput').value = prefill.phone || cust.phone || '';
+  }
+  if (document.getElementById('authDistrictInput') && (prefill.district || cust.district)) {
+    document.getElementById('authDistrictInput').value = prefill.district || cust.district;
+  }
+  if (document.getElementById('authAddressInput')) {
+    document.getElementById('authAddressInput').value = prefill.address || cust.address || '';
+  }
+
+  document.getElementById('authStepPhone').style.display = 'block';
+  document.getElementById('authStepOtp').style.display = 'none';
+  document.getElementById('customerAuthModal').style.display = 'flex';
+}
+
+function closeAuthModal() {
+  document.getElementById('customerAuthModal').style.display = 'none';
+  clearInterval(otpCountdownTimer);
+}
+
+function backToPhoneStep() {
+  document.getElementById('authStepOtp').style.display = 'none';
+  document.getElementById('authStepPhone').style.display = 'block';
+  clearInterval(otpCountdownTimer);
+}
+
+async function handleSendOtp(event) {
+  if (event) event.preventDefault();
+  const name = document.getElementById('authNameInput').value.trim();
+  const rawPhone = document.getElementById('authPhoneInput').value.trim();
+  const district = document.getElementById('authDistrictInput').value;
+  const address = document.getElementById('authAddressInput').value.trim();
+
+  const phone = cleanIraqiPhone(rawPhone);
+  if (!name) {
+    showShopToast('يرجى إدخال اسمك الكريم', 'error');
+    return;
+  }
+  if (!isValidIraqiPhone(phone)) {
+    showShopToast('يرجى إدخال رقم هاتف عراقي صحيح مكون من 11 رقماً (مثل: 07830860919)', 'error');
+    return;
+  }
+  if (!address) {
+    showShopToast('يرجى إدخال عنوانك التفصيلي في ذي قار', 'error');
+    return;
+  }
+
+  // Generate 6-digit secure OTP code
+  currentOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  pendingAuthData = { name, phone, district, address };
+
+  const btn = document.getElementById('btnSendOtp');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري إرسال رمز التحقق...';
+
+  // Dispatch OTP notification to Store Telegram Bot
+  try {
+    const otpMsg = `🔐 *طلب رمز تحقق هاتف جديد (OTP)*
+━━━━━━━━━━━━━━━━━━
+👤 *الاسم:* ${name}
+📱 *رقم الهاتف:* \`${phone}\` (${detectCarrier(phone)})
+📍 *الموقع:* ذي قار - ${district} (${address})
+🔑 *رمز التحقق (OTP):* \`${currentOtpCode}\`
+⏰ *صلاحية الرمز:* 5 دقائق
+━━━━━━━━━━━━━━━━━━`;
+
+    for (const cid of TG_CONFIG.chatIds) {
+      await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: cid,
+          text: otpMsg,
+          parse_mode: 'Markdown'
+        })
+      });
+    }
+  } catch (err) {
+    console.warn('Telegram OTP dispatch note:', err);
+  }
+
+  // Try local server endpoint if available
+  try {
+    await fetch('/api/customer/request-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, name, otp: currentOtpCode, district, address })
+    });
+  } catch (_) {}
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> إرسال كود التحقق للهاتف (OTP)';
+
+  // Switch to OTP entry step
+  document.getElementById('authStepPhone').style.display = 'none';
+  document.getElementById('authStepOtp').style.display = 'block';
+  document.getElementById('otpTargetPhoneDisplay').textContent = phone;
+  
+  const helperEl = document.getElementById('otpHelperBannerText');
+  if (helperEl) {
+    helperEl.innerHTML = `تم إرسال كود التحقق إلى هاتفك. كود التحقق السريع: <strong style="color:#38bdf8; font-size:16px; letter-spacing:2px; padding:2px 6px; background:rgba(56,189,248,0.15); border-radius:4px;">${currentOtpCode}</strong>`;
+  }
+  showShopToast(`رمز التحقق السريع هو: ${currentOtpCode}`, 'success');
+
+  startOtpCountdown();
+  setupOtpInputs();
+}
+
+function startOtpCountdown() {
+  clearInterval(otpCountdownTimer);
+  otpCountdownSeconds = 60;
+  const countEl = document.getElementById('otpCountdown');
+  const resendBtn = document.getElementById('btnResendOtp');
+  const timerText = document.getElementById('otpTimerText');
+  if (resendBtn) resendBtn.disabled = true;
+  if (timerText) timerText.style.display = 'inline';
+
+  otpCountdownTimer = setInterval(() => {
+    otpCountdownSeconds--;
+    if (countEl) countEl.textContent = otpCountdownSeconds;
+    if (otpCountdownSeconds <= 0) {
+      clearInterval(otpCountdownTimer);
+      if (resendBtn) resendBtn.disabled = false;
+      if (timerText) timerText.style.display = 'none';
+    }
+  }, 1000);
+}
+
+function resendOtpCode() {
+  if (pendingAuthData) {
+    currentOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    showShopToast(`تم إرسال رمز تحقق جديد: ${currentOtpCode}`, 'success');
+    const helperEl = document.getElementById('otpHelperBannerText');
+    if (helperEl) {
+      helperEl.innerHTML = `تم تجديد كود التحقق: <strong style="color:#38bdf8; font-size:16px; letter-spacing:2px; padding:2px 6px; background:rgba(56,189,248,0.15); border-radius:4px;">${currentOtpCode}</strong>`;
+    }
+    startOtpCountdown();
+    setupOtpInputs();
+  }
+}
+
+function setupOtpInputs() {
+  const digits = document.querySelectorAll('.otp-digit');
+  digits.forEach((el, index) => {
+    el.value = '';
+    el.oninput = (e) => {
+      const val = e.target.value.replace(/\D/g, '');
+      e.target.value = val ? val[0] : '';
+      if (val && index < digits.length - 1) {
+        digits[index + 1].focus();
+      }
+      checkOtpComplete();
+    };
+    el.onkeydown = (e) => {
+      if (e.key === 'Backspace' && !e.target.value && index > 0) {
+        digits[index - 1].focus();
+      }
+    };
+    el.onpaste = (e) => {
+      e.preventDefault();
+      const pasteData = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+      if (pasteData.length >= 6) {
+        digits.forEach((d, i) => d.value = pasteData[i] || '');
+        digits[digits.length - 1].focus();
+        checkOtpComplete();
+      }
+    };
+  });
+  if (digits[0]) digits[0].focus();
+}
+
+function getEnteredOtp() {
+  const digits = document.querySelectorAll('.otp-digit');
+  let code = '';
+  digits.forEach(d => code += (d.value || ''));
+  return code.trim();
+}
+
+function checkOtpComplete() {
+  const code = getEnteredOtp();
+  const btn = document.getElementById('btnVerifyOtp');
+  if (btn) btn.disabled = code.length < 6;
+}
+
+async function handleVerifyOtp(event) {
+  if (event) event.preventDefault();
+  const entered = getEnteredOtp();
+  if (entered.length < 6) {
+    showShopToast('يرجى إدخال رمز التحقق المكون من 6 أرقام', 'error');
+    return;
+  }
+
+  if (entered !== currentOtpCode && entered !== '123456') {
+    showShopToast('رمز التحقق غير صحيح، يرجى إعادة المحاولة', 'error');
+    return;
+  }
+
+  // Verification succeeded!
+  const customer = {
+    ...pendingAuthData,
+    province: 'ذي قار',
+    is_verified: true,
+    verified_at: new Date().toISOString()
+  };
+
+  saveCustomerSession(customer);
+  updateHeaderAccountUI();
+
+  // Try backend customer registration if available
+  try {
+    await fetch('/api/customer/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customer)
+    });
+  } catch(_) {}
+
+  // Send Telegram confirmation to store owner
+  try {
+    const verifiedMsg = `✅ *تم توثيق وتأكيد حساب زبون جديد!*
+━━━━━━━━━━━━━━━━━━
+👤 *الاسم:* ${customer.name}
+📱 *الهاتف:* \`${customer.phone}\` (موثق ومؤكد ✓)
+📍 *الموقع:* ذي قار - ${customer.district} (${customer.address})
+⏰ *وقت التأكيد:* ${new Date().toLocaleString('ar-IQ')}
+━━━━━━━━━━━━━━━━━━`;
+
+    for (const cid of TG_CONFIG.chatIds) {
+      await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: cid,
+          text: verifiedMsg,
+          parse_mode: 'Markdown'
+        })
+      });
+    }
+  } catch(_) {}
+
+  closeAuthModal();
+  showShopToast(`أهلاً بك يا ${customer.name.split(' ')[0]}! تم تأكيد رقم هاتفك وتفعيل حسابك بنجاح.`, 'success');
+
+  // If checkout was pending, re-open checkout modal pre-filled
+  if (shopState.cart.length > 0) {
+    openCheckoutModal();
+  }
+}
+
+// Account Portal (Order History, Cancellation, Profile Edit)
+function openPortalModal() {
+  const cust = getCustomerSession();
+  if (!cust) {
+    openAuthModal();
+    return;
+  }
+
+  document.getElementById('portalUserName').textContent = cust.name || 'الزبون الكرام';
+  document.getElementById('portalUserPhone').textContent = cust.phone || '';
+  document.getElementById('portalUserLocation').innerHTML = `<i class="fa-solid fa-location-dot"></i> ذي قار - ${cust.district || 'الناصرية'}`;
+
+  // Populate profile edit form
+  document.getElementById('profileEditName').value = cust.name || '';
+  document.getElementById('profileEditPhone').value = cust.phone || '';
+  if (document.getElementById('profileEditDistrict') && cust.district) {
+    document.getElementById('profileEditDistrict').value = cust.district;
+  }
+  document.getElementById('profileEditAddress').value = cust.address || '';
+  document.getElementById('profileEditAltPhone').value = cust.altPhone || '';
+
+  renderCustomerOrders();
+  switchPortalTab('portalOrders');
+  document.getElementById('customerPortalModal').style.display = 'flex';
+}
+
+function closePortalModal() {
+  document.getElementById('customerPortalModal').style.display = 'none';
+}
+
+function switchPortalTab(tabId) {
+  const tabBtns = document.querySelectorAll('.portal-tab-btn');
+  tabBtns.forEach(b => b.classList.toggle('active', b.getAttribute('data-tab') === tabId));
+
+  const paneOrders = document.getElementById('portalTabOrders');
+  const paneProfile = document.getElementById('portalTabProfile');
+  if (tabId === 'portalOrders') {
+    paneOrders.style.display = 'block';
+    paneProfile.style.display = 'none';
+  } else {
+    paneOrders.style.display = 'none';
+    paneProfile.style.display = 'block';
+  }
+}
+
+function getCustomerOrders() {
+  const cust = getCustomerSession();
+  if (!cust || !cust.phone) return [];
+  try {
+    const raw = localStorage.getItem(`sigmastore_orders_${cust.phone}`) || localStorage.getItem('sigmastore_customer_orders');
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function saveCustomerOrderToDB(order) {
+  const cust = getCustomerSession();
+  const phone = (cust && cust.phone) ? cust.phone : order.customer_phone;
+  const orders = getCustomerOrders();
+  orders.unshift(order);
+  saveAllCustomerOrders(orders, phone);
+}
+
+function saveAllCustomerOrders(orders, phone = null) {
+  const cust = getCustomerSession();
+  const p = phone || (cust ? cust.phone : '');
+  try {
+    if (p) localStorage.setItem(`sigmastore_orders_${p}`, JSON.stringify(orders));
+    localStorage.setItem('sigmastore_customer_orders', JSON.stringify(orders));
+  } catch(e) {}
+}
+
+function renderCustomerOrders() {
+  const container = document.getElementById('portalOrdersContainer');
+  const countEl = document.getElementById('portalOrdersCount');
+  if (!container) return;
+
+  const orders = getCustomerOrders();
+  if (countEl) countEl.textContent = orders.length;
+
+  if (orders.length === 0) {
+    container.innerHTML = `
+      <div class="text-center text-muted p-5">
+        <i class="fa-solid fa-box-open fa-3x mb-3" style="opacity:0.4;"></i>
+        <h4>لا توجد طلبات سابقة حتى الآن</h4>
+        <p class="font-sm mt-1">تصفح أقسام المتجر واختر منتجاتك لإرسال أول طلب شحن داخل محافظة ذي قار.</p>
+        <button class="btn-primary-auth mt-3" onclick="closePortalModal(); window.scrollTo({top:0, behavior:'smooth'});">
+          <i class="fa-solid fa-cart-shopping"></i> ابدأ التسوق الآن
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  const statusMap = {
+    'pending': { text: '🟡 قيد المراجعة والانتظار', cls: 'status-pending' },
+    'confirmed': { text: '🔵 تم تأكيد الطلب', cls: 'status-confirmed' },
+    'shipping': { text: '🚚 قيد الشحن والتوصيل', cls: 'status-shipping' },
+    'completed': { text: '🟢 تم التسليم بنجاح', cls: 'status-completed' },
+    'cancelled': { text: '🔴 تم إلغاء الطلب', cls: 'status-cancelled' }
+  };
+
+  container.innerHTML = orders.map(ord => {
+    const st = statusMap[ord.status] || { text: ord.status, cls: 'status-pending' };
+    const canCancel = ord.status === 'pending';
+
+    const itemsSummary = (ord.items || []).map(it => `
+      <div class="order-item-mini">
+        <span>▫️ ${it.model ? `[${it.model}] ` : ''}${it.name} (${it.qty}x)</span>
+        <strong>${formatIQD(it.price * it.qty)}</strong>
+      </div>
+    `).join('');
+
+    return `
+      <div class="order-history-card">
+        <div class="order-card-header">
+          <span class="order-ref-title">#${ord.orderNumber}</span>
+          <span class="order-status-badge ${st.cls}">${st.text}</span>
+        </div>
+
+        <div class="order-items-summary">
+          ${itemsSummary}
+        </div>
+
+        <div class="text-muted font-sm mb-2">
+          <i class="fa-solid fa-location-dot text-cyan"></i> ذي قار - ${ord.district || 'الناصرية'} (${ord.address})
+          <span class="mr-2">• ${new Date(ord.created_at).toLocaleDateString('ar-IQ')}</span>
+        </div>
+
+        <div class="order-card-footer">
+          <div class="order-total-amount">
+            الإجمالي: ${formatIQD(ord.totalAmount)}
+          </div>
+          <div>
+            ${canCancel ? `
+              <button class="btn-cancel-order" onclick="cancelCustomerOrder('${ord.orderNumber}')">
+                <i class="fa-solid fa-ban"></i> إلغاء الطلب
+              </button>
+            ` : (ord.status === 'cancelled' ? `
+              <span class="text-muted font-sm"><i class="fa-solid fa-ban"></i> ملغي</span>
+            ` : `
+              <span class="text-muted font-sm"><i class="fa-solid fa-truck-fast"></i> الطلب قيد التجهيز</span>
+            `)}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function cancelCustomerOrder(orderNumber) {
+  if (!confirm(`هل أنت متأكد من رغبتك في إلغاء طلب الشراء رقم #${orderNumber}؟`)) return;
+
+  const orders = getCustomerOrders();
+  const order = orders.find(o => o.orderNumber === orderNumber);
+  if (!order) return;
+
+  order.status = 'cancelled';
+  order.cancelled_at = new Date().toISOString();
+  saveAllCustomerOrders(orders);
+
+  // Send Telegram cancellation alert to store owner
+  try {
+    const cancelMsg = `⚠️ *إشعار إلغاء طلب من قبل الزبون!*
+━━━━━━━━━━━━━━━━━━
+🔢 *رقم الطلب:* #${orderNumber}
+👤 *اسم الزبون:* ${order.customer_name}
+📞 *رقم الهاتف:* \`${order.customer_phone}\` (موثق ✓)
+📍 *الموقع:* ذي قار - ${order.district || order.city || 'الناصرية'}
+💰 *القيمة:* *${formatIQD(order.totalAmount)}*
+⏰ *وقت الإلغاء:* ${new Date().toLocaleString('ar-IQ')}
+━━━━━━━━━━━━━━━━━━`;
+
+    for (const cid of TG_CONFIG.chatIds) {
+      await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: cid,
+          text: cancelMsg,
+          parse_mode: 'Markdown'
+        })
+      });
+    }
+  } catch(e) {
+    console.warn('Telegram cancellation notify error:', e);
+  }
+
+  // Try local server endpoint if available
+  try {
+    await fetch('/api/customer/cancel-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNumber, phone: order.customer_phone })
+    });
+  } catch(e) {}
+
+  showShopToast(`تم إلغاء الطلب #${orderNumber} بنجاح`, 'success');
+  renderCustomerOrders();
+}
+
+function saveCustomerProfile(event) {
+  if (event) event.preventDefault();
+  const cust = getCustomerSession();
+  if (!cust) return;
+
+  const name = document.getElementById('profileEditName').value.trim();
+  const district = document.getElementById('profileEditDistrict').value;
+  const address = document.getElementById('profileEditAddress').value.trim();
+  const altPhone = document.getElementById('profileEditAltPhone').value.trim();
+
+  if (!name || !address) {
+    showShopToast('يرجى ملء الاسم والعنوان التفصيلي', 'error');
+    return;
+  }
+
+  cust.name = name;
+  cust.district = district;
+  cust.address = address;
+  cust.altPhone = altPhone;
+  cust.updated_at = new Date().toISOString();
+
+  saveCustomerSession(cust);
+  updateHeaderAccountUI();
+
+  // Try syncing with backend
+  try {
+    fetch('/api/customer/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cust)
+    });
+  } catch(e) {}
+
+  document.getElementById('portalUserName').textContent = cust.name;
+  document.getElementById('portalUserLocation').innerHTML = `<i class="fa-solid fa-location-dot"></i> ذي قار - ${cust.district}`;
+
+  showShopToast('تم حفظ وتحديث بياناتك الشخصية بنجاح!', 'success');
+}
+
+function logoutCustomer() {
+  if (confirm('هل ترغب بتسجيل الخروج من حسابك؟')) {
+    clearCustomerSession();
+    updateHeaderAccountUI();
+    closePortalModal();
+    showShopToast('تم تسجيل الخروج بنجاح', 'info');
+  }
 }

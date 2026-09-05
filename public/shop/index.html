@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <!-- Storefront CSS -->
-  <link rel="stylesheet" href="css/shop.css?v=2.0.2">
+  <link rel="stylesheet" href="css/shop.css?v=2.1.0">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
   <div class="top-banner">
     <div class="container d-flex justify-between align-center">
       <div class="banner-text">
-        <i class="fa-solid fa-shield-check text-blue"></i> ملحقات وإلكترونيات أصلية 100% | توصيل سريع لكافة المحافظات
+        <i class="fa-solid fa-shield-check text-cyan"></i> ملحقات وإلكترونيات أصلية 100% | خدمة التوصيل الفوري داخل محافظة ذي قار حصراً
       </div>
       <div class="banner-actions">
         <button class="btn-text-link" onclick="openTrackModal()">
@@ -50,8 +50,13 @@
         <button class="clear-btn" id="clearShopSearch" onclick="clearShopSearch()" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <!-- Header Actions (Track + Cart) -->
+      <!-- Header Actions (Account + Track + Cart) -->
       <div class="header-actions">
+        <button class="btn-account-header" onclick="handleAccountBtnClick()" id="headerAccountBtn" title="تسجيل الدخول وإدارة حسابك">
+          <i class="fa-solid fa-user-circle"></i>
+          <span id="headerAccountText">حسابي</span>
+        </button>
+
         <button class="btn-track-header" onclick="openTrackModal()" title="تتبع فحص وصيانة جهازك">
           <i class="fa-solid fa-wrench"></i>
           <span>تتبع الصيانة</span>
@@ -279,25 +284,30 @@
           </div>
 
           <div class="form-field">
-            <label>المحافظة: *</label>
-            <select id="orderCity" class="shop-select" required>
-              <option value="بغداد" selected>بغداد</option>
-              <option value="البصرة">البصرة</option>
-              <option value="أربيل">أربيل</option>
-              <option value="النجف الأشرف">النجف الأشرف</option>
-              <option value="كربلاء المقدسة">كربلاء المقدسة</option>
-              <option value="نينوى (الموصل)">نينوى (الموصل)</option>
-              <option value="كركوك">كركوك</option>
-              <option value="السليمانية">السليمانية</option>
-              <option value="بابل (الحلة)">بابل (الحلة)</option>
-              <option value="ذي قار (الناصرية)">ذي قار (الناصرية)</option>
-              <option value="الأنبار">الأنبار</option>
-              <option value="ديالى">ديالى</option>
-              <option value="صلاح الدين">صلاح الدين</option>
-              <option value="واسط">واسط</option>
-              <option value="ميسان">ميسان</option>
-              <option value="المثنى">المثنى</option>
-              <option value="دهوك">دهوك</option>
+            <label>المحافظة (التوصيل متاح حصراً داخلها): *</label>
+            <select id="orderCity" class="shop-select" required disabled style="background: rgba(15, 23, 42, 0.85); color: #00e5ff; font-weight: bold; border-color: rgba(0, 229, 255, 0.4); cursor: not-allowed;">
+              <option value="ذي قار" selected>📍 محافظة ذي قار (حصراً)</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label>القضاء / الناحية في ذي قار: *</label>
+            <select id="orderDistrict" class="shop-select" required>
+              <option value="الناصرية" selected>الناصرية (مركز المحافظة)</option>
+              <option value="الشطرة">الشطرة</option>
+              <option value="الرفاعي">الرفاعي</option>
+              <option value="سوق الشيوخ">سوق الشيوخ</option>
+              <option value="قلعة سكر">قلعة سكر</option>
+              <option value="الجبايش">الجبايش</option>
+              <option value="الغراف">الغراف</option>
+              <option value="الدواية">الدواية</option>
+              <option value="الفهود">الفهود</option>
+              <option value="البطحاء">البطحاء</option>
+              <option value="النصر">النصر</option>
+              <option value="الإصلاح">الإصلاح</option>
+              <option value="سيد دخيل">سيد دخيل</option>
+              <option value="المنار">المنار</option>
+              <option value="أخرى / ريف">أخرى / ريف المحافظة</option>
             </select>
           </div>
 
@@ -358,6 +368,205 @@
           <i class="fa-brands fa-whatsapp"></i> تواصل عبر واتساب
         </a>
       </div>
+    </div>
+  </div>
+
+  <!-- Customer Auth & Phone Verification Modal (تسجيل حساب وتأكيد الهاتف) -->
+  <div id="customerAuthModal" class="shop-modal-overlay" style="display:none;">
+    <div class="shop-modal-card auth-modal-card">
+      <button class="modal-close-btn" onclick="closeAuthModal()">&times;</button>
+      
+      <!-- Step 1: Phone & Info Input -->
+      <div id="authStepPhone">
+        <div class="auth-header text-center">
+          <div class="auth-icon-circle">
+            <i class="fa-solid fa-user-shield text-cyan"></i>
+          </div>
+          <h2>تسجيل حساب وتأكيد الهاتف</h2>
+          <p class="text-muted">أدخل رقم هاتفك الحقيقي لاستلام كود التحقق وتأكيد حسابك لمنع الطلبات الوهمية</p>
+        </div>
+
+        <form id="authPhoneForm" onsubmit="handleSendOtp(event)" class="mt-3">
+          <div class="form-field mb-3">
+            <label>الاسم الكامل: *</label>
+            <input type="text" id="authNameInput" required placeholder="أدخل اسمك الثلاثي" class="shop-input">
+          </div>
+
+          <div class="form-field mb-3">
+            <label>رقم الهاتف العراقي (آسيا سيل / زين / كورك): *</label>
+            <div class="phone-input-wrap">
+              <span class="phone-country-code"><i class="fa-solid fa-phone"></i> 964+</span>
+              <input type="tel" id="authPhoneInput" required placeholder="07XXXXXXXXX" class="shop-input" maxlength="11" oninput="formatAndValidateIraqiPhone(this)">
+            </div>
+            <small class="phone-carrier-hint" id="phoneCarrierHint">أدخل 11 رقماً تبدأ بـ 078 أو 077 أو 075</small>
+          </div>
+
+          <div class="form-field mb-3">
+            <label>القضاء / المنطقة (محافظة ذي قار حصراً): *</label>
+            <select id="authDistrictInput" class="shop-select" required>
+              <option value="الناصرية" selected>الناصرية (مركز المحافظة)</option>
+              <option value="الشطرة">الشطرة</option>
+              <option value="الرفاعي">الرفاعي</option>
+              <option value="سوق الشيوخ">سوق الشيوخ</option>
+              <option value="قلعة سكر">قلعة سكر</option>
+              <option value="الجبايش">الجبايش</option>
+              <option value="الغراف">الغراف</option>
+              <option value="الدواية">الدواية</option>
+              <option value="الفهود">الفهود</option>
+              <option value="البطحاء">البطحاء</option>
+              <option value="النصر">النصر</option>
+              <option value="الإصلاح">الإصلاح</option>
+              <option value="سيد دخيل">سيد دخيل</option>
+              <option value="المنار">المنار</option>
+              <option value="أخرى / ريف">أخرى / ريف المحافظة</option>
+            </select>
+          </div>
+
+          <div class="form-field mb-3">
+            <label>العنوان التفصيلي / أقرب نقطة دالة: *</label>
+            <input type="text" id="authAddressInput" required placeholder="المنطقة، الشارع، أقرب نقطة دالة" class="shop-input">
+          </div>
+
+          <button type="submit" class="btn-primary-auth w-100" id="btnSendOtp">
+            <i class="fa-solid fa-paper-plane"></i> إرسال كود التحقق للهاتف (OTP)
+          </button>
+        </form>
+      </div>
+
+      <!-- Step 2: OTP Verification -->
+      <div id="authStepOtp" style="display:none;">
+        <div class="auth-header text-center">
+          <div class="auth-icon-circle otp-icon-pulse">
+            <i class="fa-solid fa-key text-gold"></i>
+          </div>
+          <h2>إدخال رمز التحقق الأمني</h2>
+          <p class="text-muted">تم إرسال رمز التحقق المكون من 6 أرقام إلى هاتفك <strong id="otpTargetPhoneDisplay" class="text-cyan">078XXXXXXX</strong></p>
+        </div>
+
+        <div class="otp-alert-box" id="otpHelperBanner">
+          <i class="fa-solid fa-shield-check text-cyan"></i>
+          <span id="otpHelperBannerText">وصلك كود التحقق عبر إشعار البوت أو SMS. أدخل الأرقام الستة:</span>
+        </div>
+
+        <form id="authOtpForm" onsubmit="handleVerifyOtp(event)" class="mt-3">
+          <div class="otp-input-row" dir="ltr">
+            <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off">
+            <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off">
+            <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off">
+            <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off">
+            <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off">
+            <input type="text" class="otp-digit" maxlength="1" pattern="[0-9]" inputmode="numeric" required autocomplete="off">
+          </div>
+
+          <div class="otp-timer-row d-flex justify-between align-center mt-3">
+            <span class="text-muted" id="otpTimerText">إعادة الإرسال بعد: <strong id="otpCountdown">60</strong> ثانية</span>
+            <button type="button" class="btn-resend-otp" id="btnResendOtp" disabled onclick="resendOtpCode()">إعادة طلب الرمز</button>
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="button" class="btn-cancel-shop w-50" onclick="backToPhoneStep()">تغيير الرقم</button>
+            <button type="submit" class="btn-primary-auth w-50" id="btnVerifyOtp">
+              <i class="fa-solid fa-circle-check"></i> تأكيد الحساب
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Customer Account Portal Modal (إدارة الحساب والطلبات) -->
+  <div id="customerPortalModal" class="shop-modal-overlay" style="display:none;">
+    <div class="shop-modal-card portal-modal-card">
+      <button class="modal-close-btn" onclick="closePortalModal()">&times;</button>
+
+      <!-- Portal Header with Profile Info & Verified Badge -->
+      <div class="portal-header">
+        <div class="portal-avatar">
+          <i class="fa-solid fa-user-shield"></i>
+        </div>
+        <div class="portal-user-meta">
+          <div class="d-flex align-center gap-2">
+            <h2 id="portalUserName">اسم الزبون</h2>
+            <span class="verified-pill"><i class="fa-solid fa-circle-check"></i> هاتف موثق</span>
+          </div>
+          <p class="text-muted mt-1">
+            <span id="portalUserPhone">07XXXXXXXXX</span> • 
+            <span id="portalUserLocation" class="text-cyan"><i class="fa-solid fa-location-dot"></i> ذي قار - الناصرية</span>
+          </p>
+        </div>
+        <button class="btn-logout-portal" onclick="logoutCustomer()" title="تسجيل الخروج">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          <span>خروج</span>
+        </button>
+      </div>
+
+      <!-- Portal Navigation Tabs -->
+      <div class="portal-tabs">
+        <button class="portal-tab-btn active" data-tab="portalOrders" onclick="switchPortalTab('portalOrders')">
+          <i class="fa-solid fa-clock-rotate-left"></i> سجل طلباتي (<span id="portalOrdersCount">0</span>)
+        </button>
+        <button class="portal-tab-btn" data-tab="portalProfile" onclick="switchPortalTab('portalProfile')">
+          <i class="fa-solid fa-user-pen"></i> تعديل بياناتي الشخصية
+        </button>
+      </div>
+
+      <!-- Tab 1: Orders History -->
+      <div id="portalTabOrders" class="portal-tab-pane active">
+        <div class="orders-list-wrap" id="portalOrdersContainer">
+          <!-- Dynamically populated orders -->
+        </div>
+      </div>
+
+      <!-- Tab 2: Profile Settings -->
+      <div id="portalTabProfile" class="portal-tab-pane" style="display:none;">
+        <form id="portalProfileForm" onsubmit="saveCustomerProfile(event)" class="mt-2">
+          <div class="form-grid">
+            <div class="form-field full-width">
+              <label>الاسم الكامل:</label>
+              <input type="text" id="profileEditName" class="shop-input" required>
+            </div>
+            <div class="form-field">
+              <label>رقم الهاتف الموثق:</label>
+              <input type="text" id="profileEditPhone" class="shop-input" disabled style="background: rgba(15,23,42,0.8); cursor: not-allowed; opacity: 0.85; color: #00e5ff; font-weight: bold;">
+            </div>
+            <div class="form-field">
+              <label>القضاء في محافظة ذي قار:</label>
+              <select id="profileEditDistrict" class="shop-select" required>
+                <option value="الناصرية">الناصرية (مركز المحافظة)</option>
+                <option value="الشطرة">الشطرة</option>
+                <option value="الرفاعي">الرفاعي</option>
+                <option value="سوق الشيوخ">سوق الشيوخ</option>
+                <option value="قلعة سكر">قلعة سكر</option>
+                <option value="الجبايش">الجبايش</option>
+                <option value="الغراف">الغراف</option>
+                <option value="الدواية">الدواية</option>
+                <option value="الفهود">الفهود</option>
+                <option value="البطحاء">البطحاء</option>
+                <option value="النصر">النصر</option>
+                <option value="الإصلاح">الإصلاح</option>
+                <option value="سيد دخيل">سيد دخيل</option>
+                <option value="المنار">المنار</option>
+                <option value="أخرى / ريف">أخرى / ريف المحافظة</option>
+              </select>
+            </div>
+            <div class="form-field full-width">
+              <label>العنوان التفصيلي / نقطة دالة:</label>
+              <input type="text" id="profileEditAddress" class="shop-input" required placeholder="المنطقة، الشارع، أقرب نقطة دالة">
+            </div>
+            <div class="form-field full-width">
+              <label>رقم هاتف بديل (اختياري للطوارئ والتوصيل):</label>
+              <input type="tel" id="profileEditAltPhone" class="shop-input" placeholder="07XXXXXXXXX">
+            </div>
+          </div>
+          <div class="mt-4 text-left d-flex justify-end gap-2">
+            <button type="submit" class="btn-primary-auth" id="btnSaveProfile">
+              <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
+            </button>
+          </div>
+        </form>
+      </div>
+
     </div>
   </div>
 
@@ -444,6 +653,10 @@
       <i class="fa-solid fa-magnifying-glass"></i>
       <span>البحث</span>
     </button>
+    <button class="mobile-nav-item" id="mNavAccount" onclick="handleAccountBtnClick()">
+      <i class="fa-solid fa-user-circle"></i>
+      <span id="mNavAccountText">حسابي</span>
+    </button>
     <button class="mobile-nav-item" id="mNavTrack" onclick="openTrackModal()">
       <i class="fa-solid fa-screwdriver-wrench"></i>
       <span>الصيانة</span>
@@ -461,6 +674,6 @@
   <div id="shopToastContainer" class="shop-toast-container"></div>
 
   <!-- Storefront Scripts -->
-  <script src="js/shop.js?v=2.0.2"></script>
+  <script src="js/shop.js?v=2.1.0"></script>
 </body>
 </html>
