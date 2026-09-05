@@ -29,19 +29,19 @@ const TG_CONFIG = {
 
 // Dynamic Asset URL Resolver for GitHub Pages & Local
 function resolveAssetUrl(url) {
-  if (!url) return resolveAssetUrl('/images/products/EQ33.jpg');
+  if (!url) return '../images/products/EQ33.jpg';
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
   
-  let cleanUrl = url.startsWith('/') ? url : '/' + url;
-  // Fix lowercase eq33 for Linux server case-sensitivity
-  cleanUrl = cleanUrl.replace(/eq33\.jpg/gi, 'EQ33.jpg');
+  let clean = url.startsWith('/') ? url.slice(1) : url;
+  clean = clean.replace(/eq33\.jpg/gi, 'EQ33.jpg');
 
-  const pathname = window.location.pathname;
-  if (pathname.includes('/public/shop')) {
-    const prefix = pathname.substring(0, pathname.indexOf('/public/shop'));
-    return `${prefix}/public${cleanUrl}`;
+  // If running on GitHub Pages (where current page is in /public/shop/ or on github.io domain)
+  if (window.location.hostname.includes('github.io') || window.location.pathname.includes('/public/shop')) {
+    if (clean.startsWith('itemsMedia/') || clean.startsWith('images/') || clean.startsWith('uploads/')) {
+      return `../${clean}`;
+    }
   }
-  return cleanUrl;
+  return `/${clean}`;
 }
 
 // Dynamic Store Settings Sync with Backend DB (with GitHub Pages fallback)
@@ -387,6 +387,11 @@ function showLiveSyncPill() {
 
 // Real-Time Live Sync System (BroadcastChannel + SSE + Polling Fallback)
 function initLiveSync() {
+  // If running on static GitHub Pages hosting, disable background SSE and polling loops to prevent hanging!
+  if (window.location.hostname.includes('github.io') || window.location.protocol === 'file:') {
+    return;
+  }
+
   // 1. Instant 0ms BroadcastChannel (syncs between Electron program & local shop windows)
   if (typeof BroadcastChannel !== 'undefined') {
     try {
