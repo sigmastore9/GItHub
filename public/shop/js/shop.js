@@ -29,16 +29,19 @@ const TG_CONFIG = {
 
 // Dynamic Asset URL Resolver for GitHub Pages & Local
 function resolveAssetUrl(url) {
-  if (!url) return 'images/products/eq33.jpg';
+  if (!url) return resolveAssetUrl('/images/products/EQ33.jpg');
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
   
+  let cleanUrl = url.startsWith('/') ? url : '/' + url;
+  // Fix lowercase eq33 for Linux server case-sensitivity
+  cleanUrl = cleanUrl.replace(/eq33\.jpg/gi, 'EQ33.jpg');
+
   const pathname = window.location.pathname;
-  let prefix = '';
   if (pathname.includes('/public/shop')) {
-    prefix = pathname.substring(0, pathname.indexOf('/public/shop'));
+    const prefix = pathname.substring(0, pathname.indexOf('/public/shop'));
+    return `${prefix}/public${cleanUrl}`;
   }
-  const cleanUrl = url.startsWith('/') ? url : '/' + url;
-  return `${prefix}${cleanUrl}`;
+  return cleanUrl;
 }
 
 // Dynamic Store Settings Sync with Backend DB (with GitHub Pages fallback)
@@ -309,9 +312,10 @@ function syncHeroBanner(products) {
   if (heroProduct && heroProduct.image_url) {
     // Append updated_at / timestamp for immediate cache-busting
     const v = heroProduct.updated_at ? encodeURIComponent(heroProduct.updated_at) : Date.now();
-    const imgSrc = heroProduct.image_url.includes('?') 
+    const rawSrc = heroProduct.image_url.includes('?') 
       ? heroProduct.image_url 
       : `${heroProduct.image_url}?v=${v}`;
+    const imgSrc = resolveAssetUrl(rawSrc);
 
     if (heroImg.getAttribute('data-current-src') !== imgSrc) {
       heroImg.setAttribute('data-current-src', imgSrc);
@@ -323,11 +327,11 @@ function syncHeroBanner(products) {
       const tempImg = new Image();
       tempImg.onload = () => {
         heroImg.src = imgSrc;
-        heroImg.alt = heroProduct.name || 'إعلان منتج MY Store';
+        heroImg.alt = heroProduct.name || 'إعلان منتج Sigma Store';
         heroImg.style.opacity = '1';
       };
       tempImg.onerror = () => {
-        heroImg.src = heroProduct.image_url;
+        heroImg.src = resolveAssetUrl('/images/products/EQ33.jpg');
         heroImg.style.opacity = '1';
       };
       tempImg.src = imgSrc;
@@ -488,8 +492,8 @@ function openQuickView(productId) {
   shopState.activeQvProduct = p;
   shopState.qvQty = 1;
 
-  const fallbackImg = '/images/products/eq33.jpg';
-  document.getElementById('qvImage').src = p.image_url || fallbackImg;
+  const fallbackImg = resolveAssetUrl('/images/products/EQ33.jpg');
+  document.getElementById('qvImage').src = resolveAssetUrl(p.image_url) || fallbackImg;
   document.getElementById('qvBrandBadge').textContent = `ماركة: ${p.brand || 'Hoco'}`;
   document.getElementById('qvModelBadge').textContent = p.model ? `موديل: ${p.model}` : 'ملحقات أصلية';
   document.getElementById('qvCategory').textContent = p.category || 'أخرى';
@@ -662,12 +666,12 @@ function renderCartDrawer() {
 
   shopState.cart.forEach((item, index) => {
     subtotal += item.price * item.qty;
-    const fallbackImg = '/images/products/eq33.jpg';
+    const fallbackImg = resolveAssetUrl('/images/products/EQ33.jpg');
 
     const row = document.createElement('div');
     row.className = 'cart-drawer-item';
     row.innerHTML = `
-      <img src="${item.image_url || fallbackImg}" class="cart-item-thumb" onerror="this.src='${fallbackImg}'">
+      <img src="${resolveAssetUrl(item.image_url) || fallbackImg}" class="cart-item-thumb" onerror="this.src='${fallbackImg}'">
       <div class="cart-item-details">
         <div class="cart-item-title" title="${item.name}">${item.model ? `[${item.model}] ` : ''}${item.name}</div>
         <div class="cart-item-price">${formatIQD(item.price)}</div>
