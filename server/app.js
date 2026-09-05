@@ -84,18 +84,91 @@ app.get('/api/sync/version', (req, res) => {
   });
 });
 
-// GitHub One-Click Cloud Sync API
+// GitHub One-Click Cloud Sync & Repository Resolution
 const { exec } = require('child_process');
-app.post('/api/sync/github', (req, res) => {
+
+function getGitRepoRoot() {
+  let current = __dirname;
+  while (current && current !== path.parse(current).root) {
+    if (fs.existsSync(path.join(current, '.git'))) {
+      return current;
+    }
+    current = path.dirname(current);
+  }
+  const rootCandidate = 'C:\\progect\\Sigma Store';
+  if (fs.existsSync(path.join(rootCandidate, '.git'))) {
+    return rootCandidate;
+  }
+  return path.resolve(__dirname, '..');
+}
+
+function mirrorUploadsToGit() {
   try {
-    exportStaticProductsJson();
-    const projectDir = path.join(__dirname, '..');
-    const cmd = 'git add public/shop/products.json store_data.db && git commit -m "Auto sync store products" && git push origin main';
-    exec(cmd, { cwd: projectDir }, (error, stdout, stderr) => {
-      res.json({ 
-        success: true, 
-        message: 'تمت مزامنة كافة المنتجات والأسعار مع موقع GitHub بنجاح!' 
+    const gitRoot = getGitRepoRoot();
+    const currentUploads = path.join(__dirname, '..', 'public', 'uploads');
+    const targetUploads = path.join(gitRoot, 'public', 'uploads');
+    if (path.resolve(currentUploads) === path.resolve(targetUploads)) return;
+    if (!fs.existsSync(currentUploads)) return;
+    if (!fs.existsSync(targetUploads)) {
+      fs.mkdirSync(targetUploads, { recursive: true });
+    }
+    const files = fs.readdirSync(currentUploads);
+    for (const f of files) {
+      const src = path.join(currentUploads, f);
+      const dst = path.join(targetUploads, f);
+      if (fs.existsSync(src) && !fs.existsSync(dst)) {
+        fs.copyFileSync(src, dst);
+      }
+    }
+  } catch (err) {
+    console.error('Error mirroring uploads to git repo:', err);
+  }
+}
+
+let gitSyncTimeout = null;
+function triggerGitHubCloudSync(debounceMs = 3000) {
+  if (gitSyncTimeout) clearTimeout(gitSyncTimeout);
+  return new Promise((resolve) => {
+    gitSyncTimeout = setTimeout(() => {
+      exportStaticProductsJson();
+      mirrorUploadsToGit();
+      const gitRoot = getGitRepoRoot();
+      const addCmd = 'git add public/shop/products.json public/uploads public/itemsMedia';
+      exec(addCmd, { cwd: gitRoot }, (err1) => {
+        if (err1) {
+          console.error('Git add failed:', err1.message);
+          return resolve({ success: false, message: err1.message });
+        }
+        exec('git diff --cached --quiet', { cwd: gitRoot }, (err2) => {
+          if (!err2) {
+            console.log('No git changes detected, pushing to verify upstream sync...');
+            exec('git push origin main', { cwd: gitRoot }, (pushErr, stdout) => {
+              resolve({ success: true, message: 'موقع المتجر متزامن ومحدث بالكامل!', stdout });
+            });
+            return;
+          }
+          const commitPushCmd = 'git commit -m "Auto sync store products and images [skip ci]" && git push origin main';
+          exec(commitPushCmd, { cwd: gitRoot }, (commitErr, stdout, stderr) => {
+            if (commitErr) {
+              console.error('Git commit/push error:', commitErr.message, stderr);
+              resolve({ success: false, message: commitErr.message, stderr });
+            } else {
+              console.log('Git commit & push successful:', stdout);
+              resolve({ success: true, message: 'تم تحديث موقع المتجر ورفع كافة الصور والمنتجات بنجاح!', stdout });
+            }
+          });
+        });
       });
+    }, debounceMs);
+  });
+}
+
+app.post('/api/sync/github', async (req, res) => {
+  try {
+    const result = await triggerGitHubCloudSync(100);
+    res.json({ 
+      success: true, 
+      message: result.message || 'تمت مزامنة كافة المنتجات، الصور والأسعار مع موقع GitHub بنجاح!' 
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -149,13 +222,27 @@ function exportStaticProductsJson() {
       count: products.length,
       products: products,
       settings: {
-        store_name: getSetting('store_name') || 'Sigma Store',
-        phone: getSetting('phone') || '07700000000'
+        store_name: getSetting('store_name') || 'SIGMA STORE',
+        phone: getSetting('phone') || '07830860919'
       },
       updated_at: new Date().toISOString()
     };
+    const jsonStr = JSON.stringify(data, null, 2);
+
+    // Write to app directory
     const targetPath = path.join(__dirname, '..', 'public', 'shop', 'products.json');
-    fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf8');
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.writeFileSync(targetPath, jsonStr, 'utf8');
+
+    // Mirror to git repo root if running from dist
+    const gitRoot = getGitRepoRoot();
+    const gitTargetPath = path.join(gitRoot, 'public', 'shop', 'products.json');
+    if (path.resolve(gitTargetPath) !== path.resolve(targetPath)) {
+      fs.mkdirSync(path.dirname(gitTargetPath), { recursive: true });
+      fs.writeFileSync(gitTargetPath, jsonStr, 'utf8');
+    }
+
+    mirrorUploadsToGit();
   } catch (e) {
     console.error('Error exporting static products.json:', e);
   }
@@ -295,6 +382,7 @@ app.post('/api/products', (req, res) => {
     );
 
     exportStaticProductsJson();
+    triggerGitHubCloudSync();
     sendTelegramProductAlert({
       name: name || 'منتج جديد',
       model: model || '',
@@ -366,6 +454,9 @@ app.put('/api/products/:id', (req, res) => {
       id
     );
 
+    exportStaticProductsJson();
+    triggerGitHubCloudSync();
+
     res.json({ success: true, message: 'تم تحديث بيانات المنتج بنجاح' });
   } catch (error) {
     console.error('Error updating product:', error);
@@ -376,6 +467,8 @@ app.put('/api/products/:id', (req, res) => {
 app.delete('/api/products/:id', (req, res) => {
   try {
     db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
+    exportStaticProductsJson();
+    triggerGitHubCloudSync();
     res.json({ success: true, message: 'تم حذف المنتج بنجاح' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1063,6 +1156,9 @@ app.post('/api/apply-product-image', async (req, res) => {
     // Update SQLite database
     db.prepare('UPDATE products SET image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(finalImageUrl, productId);
 
+    exportStaticProductsJson();
+    triggerGitHubCloudSync();
+
     res.json({
       success: true,
       imageUrl: finalImageUrl,
@@ -1096,6 +1192,7 @@ app.post('/api/upload-image', upload.single('image'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'لم يتم اختيار صورة' });
     }
+    mirrorUploadsToGit();
     const relativePath = `/uploads/${req.file.filename}`;
     res.json({ success: true, imageUrl: relativePath, message: 'تم رفع الصورة بنجاح' });
   } catch (error) {

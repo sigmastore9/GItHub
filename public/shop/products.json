@@ -10,8 +10,8 @@
       "brand": "Hoco",
       "selling_price": 3250,
       "stock_quantity": 10,
-      "image_url": "/itemsMedia/X118.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1788455574553-65504827.jpg",
+      "updated_at": "2026-09-03 17:12:54"
     },
     {
       "id": 29,
@@ -21,8 +21,8 @@
       "brand": "Hoco",
       "selling_price": 4750,
       "stock_quantity": 5,
-      "image_url": "/itemsMedia/UK_20W_Set.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1788455563011-491086276.jpg",
+      "updated_at": "2026-09-03 17:12:43"
     },
     {
       "id": 28,
@@ -32,8 +32,8 @@
       "brand": "Marshall",
       "selling_price": 13750,
       "stock_quantity": 5,
-      "image_url": "/itemsMedia/ME-01.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1788547463361-211010805.jpg",
+      "updated_at": "2026-09-04 18:44:23"
     },
     {
       "id": 27,
@@ -54,8 +54,8 @@
       "brand": "VIP Glass",
       "selling_price": 4250,
       "stock_quantity": 5,
-      "image_url": "/itemsMedia/brand_glass.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/brand-img-1788596367991-791.png",
+      "updated_at": "2026-09-05 08:19:29"
     },
     {
       "id": 25,
@@ -65,8 +65,8 @@
       "brand": "Diamond",
       "selling_price": 750,
       "stock_quantity": 80,
-      "image_url": "/itemsMedia/diamond.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/brand-img-1788596354388-451.jpg",
+      "updated_at": "2026-09-05 08:19:14"
     },
     {
       "id": 24,
@@ -76,8 +76,8 @@
       "brand": "Hoco",
       "selling_price": 3000,
       "stock_quantity": 5,
-      "image_url": "/itemsMedia/X76.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/brand-img-1788547537455-419.jpg",
+      "updated_at": "2026-09-04 18:45:38"
     },
     {
       "id": 23,
@@ -87,8 +87,8 @@
       "brand": "Hoco",
       "selling_price": 1500,
       "stock_quantity": 20,
-      "image_url": "/itemsMedia/X122.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1788547556982-403264167.jpg",
+      "updated_at": "2026-09-04 18:45:57"
     },
     {
       "id": 22,
@@ -131,8 +131,8 @@
       "brand": "Hoco",
       "selling_price": 2750,
       "stock_quantity": 5,
-      "image_url": "/itemsMedia/X117.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1788547636507-200861366.jpg",
+      "updated_at": "2026-09-04 18:47:16"
     },
     {
       "id": 18,
@@ -252,8 +252,8 @@
       "brand": "Hoco",
       "selling_price": 5750,
       "stock_quantity": 5,
-      "image_url": "/itemsMedia/CS32B.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1788454487666-795647777.jpg",
+      "updated_at": "2026-09-03 16:54:47"
     },
     {
       "id": 7,
@@ -296,8 +296,8 @@
       "brand": "Hoco",
       "selling_price": 11750,
       "stock_quantity": 5,
-      "image_url": "/itemsMedia/EQ33.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1788456176807-193648697.jpg",
+      "updated_at": "2026-09-03 17:22:56"
     },
     {
       "id": 3,
@@ -334,8 +334,8 @@
     }
   ],
   "settings": {
-    "store_name": "Sigma Store",
-    "phone": "07830860919 - 07835046817"
+    "store_name": "SIGMA STORE",
+    "phone": "07830860919"
   },
-  "updated_at": "2026-09-05T07:58:13.784Z"
+  "updated_at": "2026-09-05T08:27:04.371Z"
 }
