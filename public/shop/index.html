@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MY Store - متجر الإلكترونيات والملحقات الأصلية</title>
+  
+  <!-- Google Fonts: Cairo & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Storefront CSS -->
+  <link rel="stylesheet" href="css/shop.css">
+</head>
+<body>
+
+  <!-- Top Announcement Bar -->
+  <div class="top-banner">
+    <div class="container d-flex justify-between align-center">
+      <div class="banner-text">
+        <i class="fa-solid fa-shield-check text-blue"></i> ملحقات وإلكترونيات أصلية 100% | توصيل سريع لكافة المحافظات
+      </div>
+      <div class="banner-actions">
+        <button class="btn-text-link" onclick="openTrackModal()">
+          <i class="fa-solid fa-screwdriver-wrench"></i> تتبع صيانة جهازك
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Store Navigation Header -->
+  <header class="shop-header">
+    <div class="container header-inner">
+      <!-- Logo & Brand -->
+      <a href="index.html" class="shop-logo">
+        <img src="/shop/images/logo.png" alt="Sigma Store Logo" class="logo-icon" style="width:38px; height:38px; object-fit:contain; border-radius:8px; border:1px solid rgba(0,229,255,0.4); box-shadow:0 0 12px rgba(0,229,255,0.3);">
+        <div class="logo-text">
+          <span class="brand-title">SIGMA STORE</span>
+        </div>
+      </a>
+
+      <!-- Search Bar -->
+      <div class="shop-search-box">
+        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+        <input type="text" id="shopSearchInput" placeholder="ابحث باسم المنتج أو الموديل (EQ33, W112, CS32B)..." oninput="handleShopSearch()">
+        <button class="clear-btn" id="clearShopSearch" onclick="clearShopSearch()" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Header Actions (Track + Cart) -->
+      <div class="header-actions">
+        <button class="btn-track-header" onclick="openTrackModal()" title="تتبع فحص وصيانة جهازك">
+          <i class="fa-solid fa-wrench"></i>
+          <span>تتبع الصيانة</span>
+        </button>
+
+        <button class="btn-cart-header" onclick="toggleCart(true)" id="headerCartBtn">
+          <div class="cart-icon-wrapper">
+            <i class="fa-solid fa-bag-shopping"></i>
+            <span class="cart-badge" id="cartCountBadge">0</span>
+          </div>
+          <div class="cart-header-details">
+            <span class="cart-title">سلة المشتريات</span>
+            <span class="cart-amount" id="cartTotalHeader">0 د.ع</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Clean Professional Hero Showcase -->
+  <section class="hero-section">
+    <div class="container">
+      <div class="hero-card" style="background: linear-gradient(135deg, rgba(10, 22, 40, 0.95), rgba(7, 14, 27, 0.98)); border: 1px solid rgba(0, 229, 255, 0.25); box-shadow: 0 10px 35px rgba(0, 0, 0, 0.6);">
+        <div class="hero-content">
+          <span class="hero-badge" style="background: rgba(0, 229, 255, 0.12); color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.35);"><i class="fa-solid fa-gem"></i> متجر SIGMA STORE المعتمد</span>
+          <h1 style="background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #00e5ff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">SIGMA STORE — للإلكترونيات وصيانة الهواتف</h1>
+          <p>صيانة هواتف احترافية • إكسسوارات وملحقات أصلية • استنساخ وطباعة • أحدث الأجهزة والقطع الإلكترونية.</p>
+          
+          <div class="hero-features">
+            <div class="feat-item"><i class="fa-solid fa-mobile-screen-button" style="color:#00e5ff;"></i> صيانة هواتف</div>
+            <div class="feat-item"><i class="fa-solid fa-headphones" style="color:#00e5ff;"></i> اكسسوارات</div>
+            <div class="feat-item"><i class="fa-solid fa-print" style="color:#00e5ff;"></i> استنساخ</div>
+            <div class="feat-item"><i class="fa-solid fa-microchip" style="color:#00e5ff;"></i> الكترونيات</div>
+            <div class="feat-item"><i class="fa-solid fa-phone" style="color:#22c55e;"></i> 07830860919</div>
+          </div>
+        </div>
+        <div class="hero-visual">
+          <img id="heroShowcaseImg" src="/shop/images/sigma_banner.jpg" alt="إعلان SIGMA STORE المعتمد" class="hero-img" style="border-radius:12px; border:1px solid rgba(0,229,255,0.3); box-shadow: 0 8px 30px rgba(0,0,0,0.6);" onerror="this.src='/shop/images/logo_full.png'">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Category Filter Bar -->
+  <nav class="category-nav-section">
+    <div class="container">
+      <div class="category-pills" id="categoryPillsContainer">
+        <button class="cat-pill active" onclick="filterShopCategory('all', this)">
+          <i class="fa-solid fa-border-all"></i> جميع المنتجات
+        </button>
+        <button class="cat-pill" onclick="filterShopCategory('سماعات', this)">
+          <i class="fa-solid fa-headphones"></i> سماعات وصوتيات
+        </button>
+        <button class="cat-pill" onclick="filterShopCategory('كابلات', this)">
+          <i class="fa-solid fa-cable-car"></i> كابلات شحن ونقل بيانات
+        </button>
+        <button class="cat-pill" onclick="filterShopCategory('شواحن', this)">
+          <i class="fa-solid fa-bolt"></i> شواحن ورؤوس جدارية
+        </button>
+        <button class="cat-pill" onclick="filterShopCategory('محولات وتوصيلات', this)">
+          <i class="fa-solid fa-network-wired"></i> محولات وتوصيلات Hub
+        </button>
+        <button class="cat-pill" onclick="filterShopCategory('تخزين وفلاشات', this)">
+          <i class="fa-solid fa-hard-drive"></i> فلاش ميموري وتخزين
+        </button>
+        <button class="cat-pill" onclick="filterShopCategory('حماية ولواصق شاشة', this)">
+          <i class="fa-solid fa-mobile-screen"></i> حماية ولواصق شاشة
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Products Storefront Grid Section -->
+  <main class="products-container-section">
+    <div class="container">
+      
+      <!-- Section Header with count and sort -->
+      <div class="section-header d-flex justify-between align-center mb-4">
+        <div>
+          <h2 class="section-title"><i class="fa-solid fa-boxes-stacked text-blue"></i> قائمة المنتجات</h2>
+          <span class="text-muted" id="productsCountLabel">جاري تحميل المنتجات...</span>
+        </div>
+
+        <div class="sort-box">
+          <label><i class="fa-solid fa-arrow-down-short-wide"></i> ترتيب حسب:</label>
+          <select id="shopSortSelect" onchange="applyShopSorting()" class="shop-select">
+            <option value="default">الافتراضي</option>
+            <option value="price-low">السعر: من الأقل للأعلى</option>
+            <option value="price-high">السعر: من الأعلى للأقل</option>
+            <option value="name">الاسم والموديل (أ - ي)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="shopLoading" class="shop-loading-state">
+        <i class="fa-solid fa-circle-notch fa-spin fa-2x text-blue"></i>
+        <div class="mt-2">جاري تحميل المنتجات...</div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="shopEmpty" class="shop-empty-state" style="display:none;">
+        <i class="fa-solid fa-box-open empty-icon"></i>
+        <h3>لم يتم العثور على منتجات مطابقة للبحث</h3>
+        <p>جرب البحث بكلمة أخرى أو تصفح الأقسام من الأعلى.</p>
+        <button class="btn-primary-shop mt-3" onclick="resetShopFilters()">
+          <i class="fa-solid fa-rotate-right"></i> عرض كافة المنتجات
+        </button>
+      </div>
+
+      <!-- Products Grid -->
+      <div id="shopProductsGrid" class="shop-products-grid">
+        <!-- Injected via shop.js -->
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Quick View Product Modal -->
+  <div id="productQuickViewModal" class="shop-modal-overlay" style="display:none;">
+    <div class="shop-modal-card">
+      <button class="modal-close-btn" onclick="closeQuickView()">&times;</button>
+      
+      <div class="quickview-body">
+        <div class="quickview-img-box">
+          <img id="qvImage" src="" alt="صورة المنتج">
+        </div>
+
+        <div class="quickview-details">
+          <div class="qv-spec-tags">
+            <span class="spec-tag brand-tag-badge" id="qvBrandBadge">ماركة: Hoco</span>
+            <span class="spec-tag model-tag-badge" id="qvModelBadge">موديل: EQ33</span>
+            <span class="spec-tag cat-tag-badge" id="qvCategory">سماعات</span>
+          </div>
+
+          <h2 id="qvName" class="qv-title">اسم المنتج</h2>
+
+          <div class="qv-price-row">
+            <span class="qv-price-label">السعر:</span>
+            <span class="qv-price-val" id="qvPrice">0 د.ع</span>
+          </div>
+
+          <div class="qv-stock-status" id="qvStockStatus">
+            <i class="fa-solid fa-circle-check text-green"></i> متوفر وجاهز للتوصيل
+          </div>
+
+          <!-- Realistic Grounded Product Specs & Description -->
+          <div class="qv-desc-card">
+            <h4><i class="fa-solid fa-circle-info text-blue"></i> نبذة ومواصفات المنتج:</h4>
+            <p class="qv-desc" id="qvDescription">
+              منتج أصلي عالي الجودة مع كفالة المتجر وضمان ضد عيوب التصنيع.
+            </p>
+          </div>
+
+          <div class="qv-actions">
+            <div class="qv-qty-selector">
+              <button onclick="changeQvQty(-1)">-</button>
+              <span id="qvQtyDisplay">1</span>
+              <button onclick="changeQvQty(1)">+</button>
+            </div>
+            
+            <button class="btn-add-cart-lg" onclick="addQvToCart()">
+              <i class="fa-solid fa-cart-plus"></i> إضافة إلى السلة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide-Over Shopping Cart Drawer -->
+  <div id="cartOverlay" class="cart-drawer-overlay" onclick="toggleCart(false)"></div>
+  <aside id="cartDrawer" class="cart-drawer">
+    <div class="cart-drawer-header">
+      <div class="d-flex align-center gap-2">
+        <i class="fa-solid fa-bag-shopping text-blue fa-lg"></i>
+        <h3>سلة مشترياتك (<span id="cartDrawerCount">0</span>)</h3>
+      </div>
+      <button class="drawer-close-btn" onclick="toggleCart(false)">&times;</button>
+    </div>
+
+    <div class="cart-drawer-items" id="cartDrawerItems">
+      <!-- Injected items -->
+    </div>
+
+    <div class="cart-drawer-footer" id="cartDrawerFooter">
+      <div class="cart-subtotal-row">
+        <span>المجموع:</span>
+        <strong class="cart-subtotal-val" id="cartDrawerTotal">0 د.ع</strong>
+      </div>
+      <p class="cart-note"><i class="fa-solid fa-truck"></i> الدفع نقداً عند استلام الطلب</p>
+      
+      <button class="btn-checkout-drawer" onclick="openCheckoutModal()">
+        <i class="fa-solid fa-circle-check"></i> المتابعة وإتمام الطلب
+      </button>
+
+      <button class="btn-clear-cart" onclick="clearFullCart()">
+        <i class="fa-solid fa-trash-can"></i> تفريغ السلة
+      </button>
+    </div>
+  </aside>
+
+  <!-- Checkout Modal (إتمام الطلب السريع) -->
+  <div id="checkoutModal" class="shop-modal-overlay" style="display:none;">
+    <div class="shop-modal-card checkout-modal-card">
+      <button class="modal-close-btn" onclick="closeCheckoutModal()">&times;</button>
+      
+      <div class="checkout-header">
+        <i class="fa-solid fa-truck-fast text-blue fa-2x mb-2"></i>
+        <h2>إتمام طلب الشراء والتوصيل</h2>
+        <p class="text-muted">املأ معلوماتك وسنتواصل معك فوراً لتأكيد إرسال الطلب</p>
+      </div>
+
+      <form id="checkoutForm" onsubmit="submitCustomerOrder(event)">
+        <div class="form-grid">
+          
+          <div class="form-field full-width">
+            <label>الاسم الكامل: *</label>
+            <input type="text" id="orderCustName" required placeholder="أدخل اسمك الثلاثي" class="shop-input">
+          </div>
+
+          <div class="form-field">
+            <label>رقم الهاتف للتواصل: *</label>
+            <input type="tel" id="orderCustPhone" required placeholder="07XXXXXXXXX" class="shop-input">
+          </div>
+
+          <div class="form-field">
+            <label>المحافظة: *</label>
+            <select id="orderCity" class="shop-select" required>
+              <option value="بغداد" selected>بغداد</option>
+              <option value="البصرة">البصرة</option>
+              <option value="أربيل">أربيل</option>
+              <option value="النجف الأشرف">النجف الأشرف</option>
+              <option value="كربلاء المقدسة">كربلاء المقدسة</option>
+              <option value="نينوى (الموصل)">نينوى (الموصل)</option>
+              <option value="كركوك">كركوك</option>
+              <option value="السليمانية">السليمانية</option>
+              <option value="بابل (الحلة)">بابل (الحلة)</option>
+              <option value="ذي قار (الناصرية)">ذي قار (الناصرية)</option>
+              <option value="الأنبار">الأنبار</option>
+              <option value="ديالى">ديالى</option>
+              <option value="صلاح الدين">صلاح الدين</option>
+              <option value="واسط">واسط</option>
+              <option value="ميسان">ميسان</option>
+              <option value="المثنى">المثنى</option>
+              <option value="دهوك">دهوك</option>
+            </select>
+          </div>
+
+          <div class="form-field full-width">
+            <label>العنوان التفصيلي / نقطة دالة: *</label>
+            <input type="text" id="orderAddress" required placeholder="المنطقة، الشارع، أقرب نقطة دالة" class="shop-input">
+          </div>
+
+          <div class="form-field full-width">
+            <label>ملاحظات إضافية (اختياري):</label>
+            <input type="text" id="orderNotes" placeholder="أي تفاصيل خاصة بوقت الاستلام..." class="shop-input">
+          </div>
+
+        </div>
+
+        <!-- Order Summary Box -->
+        <div class="checkout-summary-box mt-3">
+          <div class="d-flex justify-between align-center">
+            <span>إجمالي قيمة المنتجات:</span>
+            <strong class="checkout-total-val" id="checkoutTotalVal">0 د.ع</strong>
+          </div>
+          <div class="d-flex justify-between align-center mt-1 text-muted" style="font-size: 12px;">
+            <span>طريقة الدفع:</span>
+            <span class="text-green"><i class="fa-solid fa-money-bill-wave"></i> الدفع نقداً عند الاستلام</span>
+          </div>
+        </div>
+
+        <div class="checkout-modal-actions mt-4">
+          <button type="button" class="btn-cancel-shop" onclick="closeCheckoutModal()">رجوع للسلة</button>
+          <button type="submit" class="btn-confirm-order" id="btnSubmitOrder">
+            <i class="fa-solid fa-check"></i> تأكيد وإرسال الطلب
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Order Success Confirmation Modal -->
+  <div id="orderSuccessModal" class="shop-modal-overlay" style="display:none;">
+    <div class="shop-modal-card text-center" style="max-width: 520px;">
+      <div class="success-icon-wrap">
+        <i class="fa-solid fa-circle-check text-green fa-4x"></i>
+      </div>
+      <h2 class="mt-3">تم استلام طلبك بنجاح!</h2>
+      <p class="text-muted mt-1">شكراً لطلبك من <strong>MY Store</strong>. سنقوم بتجهيز الطلب والاتصال بك لتأكيد موعد التوصيل.</p>
+
+      <div class="order-ref-card mt-3">
+        <div class="ref-label">رقم الطلب الخاص بك:</div>
+        <div class="ref-code" id="successOrderRef">ORD-123456</div>
+        <div class="ref-total" id="successOrderTotal">0 د.ع</div>
+      </div>
+
+      <div class="mt-4 d-flex justify-center gap-2">
+        <button class="btn-primary-shop" onclick="closeSuccessModal()">
+          <i class="fa-solid fa-bag-shopping"></i> متابعة التسوق
+        </button>
+        <a href="#" id="btnWhatsAppContact" target="_blank" class="btn-whatsapp-shop">
+          <i class="fa-brands fa-whatsapp"></i> تواصل عبر واتساب
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Customer Repair Tracking Modal -->
+  <div id="trackRepairModal" class="shop-modal-overlay" style="display:none;">
+    <div class="shop-modal-card" style="max-width: 600px;">
+      <button class="modal-close-btn" onclick="closeTrackModal()">&times;</button>
+      
+      <div class="text-center mb-3">
+        <i class="fa-solid fa-screwdriver-wrench text-blue fa-2x mb-2"></i>
+        <h2>تتبع حالة فحص وصيانة جهازك</h2>
+        <p class="text-muted">أدخل رقم تذكرة الصيانة أو رقم هاتفك لمعرفة حالة فحص وتصليح جهازك مباشرة</p>
+      </div>
+
+      <div class="d-flex gap-2">
+        <input type="text" id="trackQueryInput" placeholder="أدخل رقم التذكرة أو رقم هاتفك..." class="shop-input flex-2" onkeydown="if(event.key==='Enter') searchCustomerRepair()">
+        <button class="btn-primary-shop flex-1" onclick="searchCustomerRepair()" id="btnTrackSearch">
+          <i class="fa-solid fa-magnifying-glass"></i> استعلام
+        </button>
+      </div>
+
+      <!-- Result Container -->
+      <div id="trackResultBox" class="track-result-container mt-4" style="display:none;">
+        <!-- Injected via shop.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Store Footer -->
+  <footer class="shop-footer">
+    <div class="container footer-inner">
+      <div class="footer-col">
+        <div class="shop-logo mb-2">
+          <img src="/shop/images/logo.png" alt="Sigma Store Logo" class="logo-icon" style="width:34px; height:34px; object-fit:contain; border-radius:6px; border:1px solid rgba(0,229,255,0.4); margin-left:6px;">
+          <span class="brand-title">SIGMA STORE</span>
+        </div>
+        <p class="text-muted">مركز SIGMA STORE المتكامل: صيانة هواتف متقدمة، ملحقات وإكسسوارات أصلية، استنساخ وطباعة، وأحدث الأجهزة الإلكترونية بأعلى معايير الجودة والكفالة.</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>أقسام وخدمات المتجر</h4>
+        <ul class="footer-links">
+          <li><a href="javascript:void(0)" onclick="openTrackModal()"><i class="fa-solid fa-screwdriver-wrench text-blue"></i> صيانة هواتف معتمدة</a></li>
+          <li><a href="javascript:void(0)" onclick="filterShopCategory('سماعات')"><i class="fa-solid fa-headphones text-blue"></i> اكسسوارات وملحقات</a></li>
+          <li><a href="javascript:void(0)"><i class="fa-solid fa-print text-blue"></i> خدمات استنساخ وطباعة</a></li>
+          <li><a href="javascript:void(0)"><i class="fa-solid fa-microchip text-blue"></i> إلكترونيات وقطع أصلية</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>خدمات الزبائن والكفالة</h4>
+        <ul class="footer-links">
+          <li><a href="javascript:void(0)" onclick="openTrackModal()"><i class="fa-solid fa-wrench"></i> فحص واستلام جهازك بالورشة</a></li>
+          <li><a href="javascript:void(0)"><i class="fa-solid fa-award"></i> كفالة وجودة 100% أصلية</a></li>
+          <li><a href="javascript:void(0)"><i class="fa-solid fa-truck"></i> توصيل سريع لجميع المحافظات</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>تواصل مع SIGMA STORE</h4>
+        <div class="footer-contact">
+          <div><i class="fa-solid fa-location-dot text-blue"></i> العراق - SIGMA STORE للملحقات والصيانة</div>
+          <div id="footerPhone"><i class="fa-solid fa-phone text-blue"></i> خدمة الزبائن: 07830860919 - 07835046817</div>
+          <div><i class="fa-brands fa-whatsapp text-success"></i> واتساب: <a href="https://wa.me/9647830860919" target="_blank" style="color: #22c55e; font-weight: 700; text-decoration: none;">07830860919</a></div>
+          <div><i class="fa-solid fa-clock text-blue"></i> يومياً: 9:00 صباحاً - 11:30 مساءً</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="container text-center">
+        <p>© 2026 جميع الحقوق محفوظة لـ <strong>SIGMA STORE</strong></p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Mobile Floating Bottom Navigation Bar -->
+  <nav class="mobile-bottom-nav">
+    <button class="mobile-nav-item active" id="mNavHome" onclick="filterShopCategory('all', null); window.scrollTo({top: 0, behavior: 'smooth'});">
+      <i class="fa-solid fa-house"></i>
+      <span>الرئيسية</span>
+    </button>
+    <button class="mobile-nav-item" id="mNavSearch" onclick="focusShopSearch()">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <span>البحث</span>
+    </button>
+    <button class="mobile-nav-item" id="mNavTrack" onclick="openTrackModal()">
+      <i class="fa-solid fa-screwdriver-wrench"></i>
+      <span>الصيانة</span>
+    </button>
+    <button class="mobile-nav-item mobile-cart-nav-btn" onclick="toggleCart(true)">
+      <div class="mobile-cart-icon-wrap">
+        <i class="fa-solid fa-bag-shopping"></i>
+        <span class="cart-badge" id="mobileCartCountBadge">0</span>
+      </div>
+      <span id="mobileCartTotalLabel">السلة (0)</span>
+    </button>
+  </nav>
+
+  <!-- Toast Container -->
+  <div id="shopToastContainer" class="shop-toast-container"></div>
+
+  <!-- Storefront Scripts -->
+  <script src="js/shop.js"></script>
+</body>
+</html>

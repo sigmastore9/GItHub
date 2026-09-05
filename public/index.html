@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sigma Store - نظام إدارة المخزون والصيانة والخدمات</title>
+  <link rel="icon" type="image/png" href="/images/logo.png">
+  <!-- Google Fonts: Cairo & Tajawal -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app" class="app-container">
+    
+    <!-- SIDEBAR (RIGHT in RTL) -->
+    <aside class="app-sidebar" id="appSidebar">
+      <!-- Logo & Store Branding -->
+      <div class="sidebar-brand">
+        <div class="brand-logo-wrap">
+          <img src="/images/logo.png" alt="Sigma Store Logo" class="sidebar-logo-img" onclick="toggleSidebar()" title="تصغير / توسيع القائمة الجانبية">
+          <div class="brand-text-block">
+            <h1 class="sidebar-store-title" id="headerStoreName">Sigma Store</h1>
+            <span class="sidebar-store-subtitle">صيانة • اكسسوارات • الكترونيات</span>
+          </div>
+          <button id="sidebarToggleBtn" class="sidebar-toggle-btn" onclick="toggleSidebar()" title="تصغير / توسيع القائمة الجانبية">
+            <i class="fa-solid fa-angles-right" id="sidebarToggleIcon"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs (Side Menus below Logo) -->
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">الأقسام والعمليات</div>
+
+        <button class="nav-btn active" data-tab="inventory" onclick="switchTab('inventory')" title="المخزون والبضائع">
+          <i class="fa-solid fa-boxes-packing"></i>
+          <span>المخزون والبضائع</span>
+          <span class="badge-count" id="navStockCount">0</span>
+        </button>
+
+        <button class="nav-btn" data-tab="pos" onclick="switchTab('pos')" title="نقطة البيع السريعة">
+          <i class="fa-solid fa-cash-register"></i>
+          <span>نقطة البيع السريعة</span>
+        </button>
+
+        <button class="nav-btn" data-tab="debts" onclick="switchTab('debts')" title="سجل الديون والآجل">
+          <i class="fa-solid fa-hand-holding-dollar"></i>
+          <span>سجل الديون والآجل</span>
+          <span class="badge-count badge-danger" id="navDebtsCount">0</span>
+        </button>
+
+        <button class="nav-btn" data-tab="online-orders" onclick="switchTab('online-orders')" title="طلبات الموقع أونلاين">
+          <i class="fa-solid fa-truck-ramp-box"></i>
+          <span>طلبات الموقع أونلاين</span>
+          <span class="badge-count badge-success" id="navOrdersCount">0</span>
+        </button>
+
+        <div class="nav-section-label">الورشة والخدمات</div>
+
+        <button class="nav-btn" data-tab="repairs" onclick="switchTab('repairs')" title="صيانة الأجهزة (هاردوير)">
+          <i class="fa-solid fa-screwdriver-wrench"></i>
+          <span>صيانة الأجهزة (هاردوير)</span>
+          <span class="badge-count badge-warning" id="navRepairCount">0</span>
+        </button>
+
+        <button class="nav-btn" data-tab="software" onclick="switchTab('software')" title="خدمات السوفت وير">
+          <i class="fa-solid fa-laptop-code"></i>
+          <span>خدمات السوفت وير</span>
+          <span class="badge-count badge-info" id="navSoftwareCount">0</span>
+        </button>
+
+        <div class="nav-section-label">التقارير والإدارة</div>
+
+        <button class="nav-btn" data-tab="stats" onclick="switchTab('stats')" title="قسم الأرباح والتقارير">
+          <i class="fa-solid fa-chart-pie"></i>
+          <span>قسم الأرباح والتقارير</span>
+        </button>
+
+        <button class="nav-btn" data-tab="invoices" onclick="switchTab('invoices')" title="الفواتير المستوردة">
+          <i class="fa-solid fa-file-pdf"></i>
+          <span>الفواتير المستوردة</span>
+        </button>
+
+        <button class="nav-btn" data-tab="settings" onclick="switchTab('settings')" title="الإعدادات والنسخ">
+          <i class="fa-solid fa-gear"></i>
+          <span>الإعدادات والنسخ</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <a href="/shop" target="_blank" class="sidebar-shop-link" title="معاينة وفتح متجر الزبائن الإلكتروني في المتصفح">
+          <i class="fa-solid fa-store"></i> <span class="sidebar-footer-text">🌐 متجر الزبائن (الموقع)</span>
+        </a>
+        <div class="sidebar-system-badge">
+          <span class="live-dot"></span> <span class="sidebar-meta-text">Sigma Store • المنفذ 4000</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN WRAPPER (Top Header + Content Area) -->
+    <div class="main-wrapper">
+      
+      <!-- Top Header (KPIs + Actions) -->
+      <header class="top-header">
+        <div class="header-right-tools">
+          <button class="header-toggle-sidebar-btn" onclick="toggleSidebar()" title="تصغير / توسيع القائمة الجانبية">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+        </div>
+
+        <!-- Quick KPI Badges in Header -->
+        <div class="header-kpis">
+          <div class="kpi-chip kpi-profit" title="إجمالي الأرباح الكلية (مبيعات + هاردوير + سوفت وير)">
+            <i class="fa-solid fa-sack-dollar"></i>
+            <div>
+              <span class="chip-label">صافي الأرباح الكلية</span>
+              <span class="chip-val text-success" id="headNetProfit">0 د.ع</span>
+            </div>
+          </div>
+          <div class="kpi-chip kpi-stock" title="رأس المال الموجود في المخزن">
+            <i class="fa-solid fa-warehouse"></i>
+            <div>
+              <span class="chip-label">رأس مال المخزن</span>
+              <span class="chip-val" id="headInventoryValue">0 د.ع</span>
+            </div>
+          </div>
+          <div class="kpi-chip kpi-workshop" title="أجهزة بانتظار الصيانة">
+            <i class="fa-solid fa-wrench"></i>
+            <div>
+              <span class="chip-label">صيانة الهاردوير</span>
+              <span class="chip-val" id="headActiveRepairs">0 جهاز</span>
+            </div>
+          </div>
+          <div class="kpi-chip kpi-software" title="أرباح خدمات السوفت وير">
+            <i class="fa-solid fa-laptop-code"></i>
+            <div>
+              <span class="chip-label">أرباح السوفت وير</span>
+              <span class="chip-val text-info" id="headSoftwareProfit">0 د.ع</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-left">
+          <button class="btn btn-outline btn-sm" onclick="showInvoiceModal()" title="استيراد فاتورة PDF">
+            <i class="fa-solid fa-file-invoice-dollar"></i> استيراد فاتورة
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="showAddProductModal()">
+            <i class="fa-solid fa-plus"></i> إضافة منتج
+          </button>
+        </div>
+      </header>
+
+      <!-- Main Content Area -->
+      <main class="content-container">
+
+      <!-- ============================================== -->
+      <!-- TAB 1: INVENTORY & STOCK MANAGEMENT -->
+      <!-- ============================================== -->
+      <section id="tab-inventory" class="tab-content active">
+        <!-- Sticky Controls Bar (Always fixed at top during scroll) -->
+        <div class="sticky-controls-wrapper">
+          <div class="control-bar">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass search-icon"></i>
+              <input type="text" id="productSearchInput" placeholder="بحث فوري بكود الموديل (مثال: EQ33, M114, C155B) أو الاسم أو الصنف..." oninput="debouncedProductSearch()">
+              <button class="clear-search-btn" onclick="clearSearch()" id="clearSearchBtn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="filter-group">
+              <select id="stockFilterSelect" onchange="loadProducts()" class="form-select">
+                <option value="all">كل الحالات</option>
+                <option value="in_stock">المتوفر بالمخزن فقط</option>
+                <option value="low_stock">المخزون المنخفض (نواقص)</option>
+                <option value="out_of_stock">المنتهي (0 متبقي)</option>
+              </select>
+
+              <div class="view-toggle">
+                <button class="view-btn active" id="btnViewGrid" onclick="setViewMode('grid')" title="عرض البطاقات والصور الكبيرة">
+                  <i class="fa-solid fa-table-cells-large"></i>
+                </button>
+                <button class="view-btn" id="btnViewTable" onclick="setViewMode('table')" title="عرض جدول تفصيلي">
+                  <i class="fa-solid fa-list-ul"></i>
+                </button>
+              </div>
+
+              <button class="btn btn-primary" onclick="showAddProductModal()">
+                <i class="fa-solid fa-plus-circle"></i> + إضافة منتج يدوي
+              </button>
+            </div>
+          </div>
+
+          <!-- Category Filter Chips Bar -->
+          <div class="category-chips">
+            <button class="chip active" onclick="filterCategory('all', this)">الكل (<span id="catCountAll">0</span>)</button>
+            <button class="chip" onclick="filterCategory('سماعات', this)"><i class="fa-solid fa-headphones"></i> سماعات</button>
+            <button class="chip" onclick="filterCategory('كابلات', this)"><i class="fa-solid fa-cable-car"></i> كابلات</button>
+            <button class="chip" onclick="filterCategory('شواحن', this)"><i class="fa-solid fa-bolt"></i> شواحن</button>
+            <button class="chip" onclick="filterCategory('محولات وتوصيلات', this)"><i class="fa-solid fa-network-wired"></i> محولات وتوصيلات</button>
+            <button class="chip" onclick="filterCategory('تخزين وفلاشات', this)"><i class="fa-solid fa-hard-drive"></i> تخزين وفلاشات</button>
+            <button class="chip" onclick="filterCategory('حماية ولواصق شاشة', this)"><i class="fa-solid fa-mobile-screen"></i> حماية ولواصق</button>
+            <button class="chip" onclick="filterCategory('أخرى', this)">أخرى</button>
+          </div>
+        </div>
+
+        <!-- Products List (Grid or Table) -->
+        <div class="products-section">
+          <!-- Loading state -->
+          <div id="productsLoading" class="loading-spinner" style="display:none;">
+            <i class="fa-solid fa-circle-notch fa-spin fa-2x"></i>
+            <div class="mt-2">جاري تحميل المنتجات...</div>
+          </div>
+
+          <!-- Empty state -->
+          <div id="productsEmpty" class="empty-state" style="display:none;">
+            <i class="fa-solid fa-box-open empty-icon"></i>
+            <h3>لا توجد منتجات مطابقة للبحث</h3>
+            <p>يمكنك استيراد فاتورة هوكو بضغطة زر أو إضافة منتجات جديدة.</p>
+            <div class="empty-actions">
+              <button class="btn btn-primary" onclick="showInvoiceModal()">
+                <i class="fa-solid fa-cloud-arrow-up"></i> استيراد فاتورة المورد
+              </button>
+              <button class="btn btn-outline" onclick="showAddProductModal()">
+                <i class="fa-solid fa-plus"></i> إضافة منتج يدوي
+              </button>
+            </div>
+          </div>
+
+          <!-- 1. Grid View (Cards) -->
+          <div id="productsGrid" class="products-grid">
+            <!-- Dynamic product cards -->
+          </div>
+
+          <!-- 2. Table View -->
+          <div id="productsTableContainer" class="table-container" style="display:none;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>الصورة</th>
+                  <th>الموديل والاسم</th>
+                  <th>الصنف</th>
+                  <th>سعر الجملة</th>
+                  <th>سعر البيع للزبون</th>
+                  <th>المشترى</th>
+                  <th>المباع</th>
+                  <th>المتبقي بالمخزن</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="productsTableBody">
+                <!-- Dynamic product rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 2: FAST POINT OF SALE (POS) & TOUCH MODE -->
+      <!-- ============================================== -->
+      <section id="tab-pos" class="tab-content">
+        <div class="pos-layout">
+          <!-- Products Catalog for POS -->
+          <div class="pos-catalog">
+            <div class="pos-search-bar">
+              <div class="pos-search flex-1">
+                <i class="fa-solid fa-barcode"></i>
+                <input type="text" id="posSearchInput" placeholder="⚡ امسح الباركود أو ابحث بالاسم والموديل (اضغط Enter للإضافة الفورية)..." oninput="debouncedPosSearch()" onkeydown="handlePosBarcodeEnter(event)">
+              </div>
+              <button class="btn btn-outline btn-touch-toggle" id="btnToggleTouchMode" onclick="toggleTouchPosMode()" title="التبديل بين الوضع الكلاسيكي ووضع شاشة اللمس الكبيرة">
+                <i class="fa-solid fa-hand-pointer"></i> <span id="touchModeLabelText">وضع شاشة اللمس</span>
+              </button>
+            </div>
+
+            <!-- POS Quick Category Pills -->
+            <div class="pos-category-chips" id="posCategoryChips">
+              <button class="chip-btn active" onclick="filterPosByCategory('all', this)"><i class="fa-solid fa-border-all"></i> الكل</button>
+              <button class="chip-btn" onclick="filterPosByCategory('سماعات', this)"><i class="fa-solid fa-headphones"></i> سماعات</button>
+              <button class="chip-btn" onclick="filterPosByCategory('كابلات', this)"><i class="fa-solid fa-cable-car"></i> كابلات</button>
+              <button class="chip-btn" onclick="filterPosByCategory('شواحن', this)"><i class="fa-solid fa-bolt"></i> شواحن</button>
+              <button class="chip-btn" onclick="filterPosByCategory('محولات وتوصيلات', this)"><i class="fa-solid fa-network-wired"></i> محولات Hub</button>
+              <button class="chip-btn" onclick="filterPosByCategory('تخزين وفلاشات', this)"><i class="fa-solid fa-hard-drive"></i> فلاش ميموري</button>
+              <button class="chip-btn" onclick="filterPosByCategory('حماية ولواصق شاشة', this)"><i class="fa-solid fa-mobile-screen"></i> لواصق شاشة</button>
+            </div>
+
+            <div class="pos-grid" id="posProductsGrid">
+              <!-- Pos items -->
+            </div>
+          </div>
+
+          <!-- Checkout Cart Register -->
+          <div class="pos-cart-panel">
+            <div class="cart-header">
+              <h3><i class="fa-solid fa-cart-shopping"></i> قائمة البيع وتعديل الأسعار</h3>
+              <button class="btn btn-sm btn-ghost" onclick="clearCart()"><i class="fa-solid fa-trash"></i> تفريغ</button>
+            </div>
+
+            <div class="cart-items" id="cartItemsList">
+              <div class="cart-empty">
+                <i class="fa-solid fa-basket-shopping"></i>
+                <p>اختر منتجاً من القائمة لبدء عملية البيع</p>
+              </div>
+            </div>
+
+            <div class="cart-summary">
+              <!-- Payment Type Toggle (Cash vs Debt/Credit) -->
+              <div class="payment-type-selector mb-2">
+                <label class="pay-option">
+                  <input type="radio" name="posPaymentType" value="cash" checked onchange="handlePaymentTypeChange()">
+                  <span class="pay-badge pay-cash"><i class="fa-solid fa-money-bill-wave"></i> 💵 بيع نقدي فوري</span>
+                </label>
+                <label class="pay-option">
+                  <input type="radio" name="posPaymentType" value="credit" onchange="handlePaymentTypeChange()">
+                  <span class="pay-badge pay-debt"><i class="fa-solid fa-hand-holding-dollar"></i> 📝 بيع آجل (دين)</span>
+                </label>
+              </div>
+
+              <div class="summary-row">
+                <span>إجمالي سعر الجملة (التكلفة):</span>
+                <span id="cartTotalCost">0 د.ع</span>
+              </div>
+              
+              <!-- Discount input -->
+              <div class="summary-row align-center">
+                <span>خصم / تخفيض للزبون (د.ع):</span>
+                <input type="number" id="cartGlobalDiscount" value="0" min="0" step="250" class="form-input form-input-sm text-left" style="width: 120px;" oninput="renderPosCartSummary()">
+              </div>
+
+              <div class="summary-row highlight-profit">
+                <span>صافي ربح هذه البيعة:</span>
+                <span id="cartTotalProfit" class="profit-text">+0 د.ع</span>
+              </div>
+              <div class="summary-row total-row">
+                <span>المبلغ المطلوب من الزبون:</span>
+                <span id="cartTotalSelling" class="total-price">0 د.ع</span>
+              </div>
+
+              <!-- Customer Details Inputs -->
+              <div class="cart-inputs">
+                <input type="text" id="cartCustomerName" placeholder="اسم الزبون (مطلوب عند البيع الآجل)" class="form-input">
+                <input type="tel" id="cartCustomerPhone" placeholder="رقم هاتف الزبون (للتواصل والواتساب)" class="form-input" style="display:none;">
+                <input type="number" id="cartInitialPaid" placeholder="المبلغ المدفوع كدفعة أولى (د.ع)" class="form-input" min="0" value="0" style="display:none;" oninput="renderPosCartSummary()">
+                <input type="text" id="cartSellerName" placeholder="اسم البائع" value="مدير المتجر" class="form-input">
+              </div>
+
+              <!-- Credit remaining notice -->
+              <div id="cartRemainingDebtNotice" class="debt-notice-box mb-2" style="display:none;">
+                <span>المبلغ المتبقي كدين على الزبون:</span>
+                <strong id="cartRemainingDebtAmount" class="text-danger">0 د.ع</strong>
+              </div>
+
+              <div class="d-flex gap-2 mt-2">
+                <button class="btn btn-success flex-2 btn-lg" onclick="checkoutSale()" id="btnCheckout" style="flex:2;">
+                  <i class="fa-solid fa-check-circle"></i> <span id="btnCheckoutLabel">تأكيد البيع وخصم المخزون</span>
+                </button>
+                <button class="btn btn-outline" onclick="printLastSaleReceipt()" title="طباعة وصل وفاتورة آخر بيعة" style="flex:1;">
+                  <i class="fa-solid fa-print"></i> طباعة الوصل
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 2.2: CUSTOMER DEBTS & CREDIT LEDGER (سجل الديون والآجل) -->
+      <!-- ============================================== -->
+      <section id="tab-debts" class="tab-content">
+        <!-- Debts KPI Cards -->
+        <div class="repair-kpis-grid">
+          <div class="kpi-card stat-pending">
+            <div class="kpi-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num text-danger" id="debtTotalOutstanding">0 د.ع</span>
+              <span class="kpi-title">إجمالي الديون المستحقة بذمة الزبائن</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-ready">
+            <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num text-success" id="debtTotalCollected">0 د.ع</span>
+              <span class="kpi-title">المبالغ المسددة والمحصلة</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-progress">
+            <div class="kpi-icon"><i class="fa-solid fa-users"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num" id="debtActiveCount">0</span>
+              <span class="kpi-title">عدد الزبائن المدينين حالياً</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-delivered">
+            <div class="kpi-icon"><i class="fa-solid fa-receipt"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num text-info" id="debtTotalCreated">0 د.ع</span>
+              <span class="kpi-title">إجمالي المبيعات الآجلة المسجلة</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls: Filter & Search Debts -->
+        <div class="control-bar mt-3">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="debtSearchInput" placeholder="بحث باسم العميل، رقم الهاتف، المواد المطلوبة، أو الملاحظات..." oninput="debouncedDebtSearch()">
+          </div>
+
+          <div class="filter-group">
+            <select id="debtStatusFilter" onchange="loadDebts()" class="form-select">
+              <option value="all">كل الحسابات</option>
+              <option value="unpaid">🔴 غير مسدد بالكامل</option>
+              <option value="partially_paid">🟡 مسدد جزئياً</option>
+              <option value="paid">🟢 تم التسديد بالكامل</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Debts Table -->
+        <div class="table-container mt-3">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>رقم السجل</th>
+                <th>اسم العميل ورقم الهاتف</th>
+                <th>المواد / المصدر</th>
+                <th>إجمالي الدين</th>
+                <th>المسدد</th>
+                <th>المتبقي بذمة العميل</th>
+                <th>الحالة</th>
+                <th>تاريخ الدين</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="debtsTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 2.5: ONLINE CUSTOMER ORDERS (طلبات المتجر أونلاين) -->
+      <!-- ============================================== -->
+      <section id="tab-online-orders" class="tab-content">
+        <div class="d-flex justify-between align-center mb-3">
+          <div>
+            <h2><i class="fa-solid fa-truck-ramp-box text-cyan"></i> سجل طلبات الزبائن الواردة من الموقع الإلكتروني</h2>
+            <p class="text-muted">الطلبات المباشرة التي يقوم الزبائن بشرائها من المتجر الإلكتروني أونلاين</p>
+          </div>
+          <a href="/shop" target="_blank" class="btn btn-outline" style="border-color: #00e5ff; color: #00e5ff;">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> فتح المتجر لمعاينته كما يراه الزبون
+          </a>
+        </div>
+
+        <div class="table-container mt-3">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>رقم الطلب</th>
+                <th>اسم الزبون والهاتف</th>
+                <th>المحافظة والعنوان</th>
+                <th>المنتجات والكميات المطلوبة</th>
+                <th>المبلغ الإجمالي</th>
+                <th>حالة الطلب والتوصيل</th>
+                <th>تاريخ الطلب</th>
+                <th>الإجراء</th>
+              </tr>
+            </thead>
+            <tbody id="onlineOrdersTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 3: WORKSHOP & HARDWARE REPAIRS -->
+      <!-- ============================================== -->
+      <section id="tab-repairs" class="tab-content">
+        <!-- Repair KPIs -->
+        <div class="repair-kpis-grid">
+          <div class="kpi-card stat-pending">
+            <div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num" id="repairPendingCount">0</span>
+              <span class="kpi-title">أجهزة قيد الفحص</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-progress">
+            <div class="kpi-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num" id="repairProgressCount">0</span>
+              <span class="kpi-title">أجهزة قيد التصليح</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-ready">
+            <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num" id="repairReadyCount">0</span>
+              <span class="kpi-title">جاهزة للاستلام</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-unrepaired">
+            <div class="kpi-icon"><i class="fa-solid fa-circle-xmark"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num text-danger" id="repairUnrepairedCount">0</span>
+              <span class="kpi-title">لم يتم التصليح (خسائر)</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-delivered">
+            <div class="kpi-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num text-success" id="repairTotalProfit">0 د.ع</span>
+              <span class="kpi-title">صافي أرباح الصيانة</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls: Add Repair & Search -->
+        <div class="control-bar mt-3">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="repairSearchInput" placeholder="بحث برقم التذكرة، اسم الزبون، الهاتف، أو الموديل..." oninput="debouncedRepairSearch()">
+          </div>
+
+          <div class="filter-group">
+            <select id="repairStatusFilter" onchange="loadRepairs()" class="form-select">
+              <option value="all">كل الحالات</option>
+              <option value="pending">🟡 قيد الفحص</option>
+              <option value="in_progress">🔵 قيد العمل والتصليح</option>
+              <option value="ready">🟢 جاهز للاستلام</option>
+              <option value="delivered">✅ تم التسليم والمحاسبة</option>
+              <option value="unrepaired">❌ لم يتم التصليح</option>
+            </select>
+
+            <button class="btn btn-primary" onclick="showAddRepairModal()">
+              <i class="fa-solid fa-plus-circle"></i> + استلام جهاز جديد للصيانة
+            </button>
+          </div>
+        </div>
+
+        <!-- Repairs Table -->
+        <div class="table-container mt-3">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>رقم التذكرة</th>
+                <th>اسم الزبون والهاتف</th>
+                <th>نوع وموديل الجهاز</th>
+                <th>وصف العطل / المشكلة</th>
+                <th>تكلفة القطع</th>
+                <th>المبلغ الإجمالي</th>
+                <th>الربح / الخسارة</th>
+                <th>الحالة</th>
+                <th>تاريخ الاستلام</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="repairsTableBody">
+              <!-- Repairs rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 4: SOFTWARE SERVICES (أعمال السوفت وير) -->
+      <!-- ============================================== -->
+      <section id="tab-software" class="tab-content">
+        <div class="repair-kpis-grid">
+          <div class="kpi-card stat-progress">
+            <div class="kpi-icon"><i class="fa-solid fa-laptop-code"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num" id="sftTotalCount">0</span>
+              <span class="kpi-title">إجمالي خدمات السوفت وير</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-ready">
+            <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num" id="sftCompletedCount">0</span>
+              <span class="kpi-title">العمليات الناجحة</span>
+            </div>
+          </div>
+          <div class="kpi-card stat-delivered">
+            <div class="kpi-icon"><i class="fa-solid fa-sack-dollar"></i></div>
+            <div class="kpi-data">
+              <span class="kpi-num text-success" id="sftTotalProfit">0 د.ع</span>
+              <span class="kpi-title">صافي أرباح السوفت وير</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Software Controls -->
+        <div class="control-bar mt-3">
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="softwareSearchInput" placeholder="بحث بالاسم، رقم الهاتف، نوع الخدمة (FRP, حسابات, فورمات, فيروسات)..." oninput="debouncedSoftwareSearch()">
+          </div>
+
+          <div class="filter-group">
+            <select id="softwareStatusFilter" onchange="loadSoftwareServices()" class="form-select">
+              <option value="all">كل الحالات</option>
+              <option value="completed">✅ تم الإنجاز بنجاح</option>
+              <option value="in_progress">🔵 قيد المعالجة</option>
+              <option value="failed">❌ فشل / ملغي</option>
+            </select>
+
+            <button class="btn btn-primary" onclick="showAddSoftwareModal()">
+              <i class="fa-solid fa-plus-circle"></i> + تسجيل خدمة سوفت وير جديدة
+            </button>
+          </div>
+        </div>
+
+        <!-- Software Table -->
+        <div class="table-container mt-3">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>رقم العملية</th>
+                <th>اسم الزبون والهاتف</th>
+                <th>الجهاز والموديل</th>
+                <th>نوع خدمة السوفت وير</th>
+                <th>تكلفة السيرفر / الأدوات</th>
+                <th>المبلغ المستلم</th>
+                <th>صافي الربح</th>
+                <th>الحالة</th>
+                <th>التاريخ</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="softwareTableBody">
+              <!-- Software rows -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 5: DEDICATED PROFITS & FINANCIAL REPORTS -->
+      <!-- ============================================== -->
+      <section id="tab-stats" class="tab-content">
+        <!-- Master Profits 4-Cards Grid -->
+        <div class="stats-overview-grid">
+          <!-- 1. Master Total Net Profit -->
+          <div class="analytics-card profit-master">
+            <div class="analytics-header">
+              <div class="analytics-icon"><i class="fa-solid fa-money-bill-trend-up"></i></div>
+              <div>
+                <h4>إجمالي صافي الأرباح الكلية</h4>
+                <p>مبيعات المنتجات + صيانة الهاردوير + خدمات السوفت وير</p>
+              </div>
+            </div>
+            <div class="analytics-value text-success" id="statMasterProfit">0 د.ع</div>
+            <div class="analytics-sub">
+              <span>أرباح اليوم المحققة: <b id="statTodayProfit">0 د.ع</b></span>
+            </div>
+          </div>
+
+          <!-- 2. Product Sales Profit -->
+          <div class="analytics-card">
+            <div class="analytics-header">
+              <div class="analytics-icon icon-cyan"><i class="fa-solid fa-boxes-packing"></i></div>
+              <div>
+                <h4>أرباح مبيعات المنتجات</h4>
+                <p>صافي ربح بيع بضائع المتجر</p>
+              </div>
+            </div>
+            <div class="analytics-value" id="statSalesProfit">0 د.ع</div>
+            <div class="analytics-sub">
+              <span>إجمالي المبيعات: <b id="statSalesRevenue">0 د.ع</b></span>
+            </div>
+          </div>
+
+          <!-- 3. Hardware Repair Profit & Losses -->
+          <div class="analytics-card">
+            <div class="analytics-header">
+              <div class="analytics-icon icon-purple"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+              <div>
+                <h4>أرباح صيانة الهاردوير</h4>
+                <p>صافي أجرة اليد (بعد خصم الخسائر)</p>
+              </div>
+            </div>
+            <div class="analytics-value" id="statWorkshopProfit">0 د.ع</div>
+            <div class="analytics-sub">
+              <span class="text-danger">إجمالي الخسائر: <b id="statWorkshopLoss">0 د.ع</b></span>
+            </div>
+          </div>
+
+          <!-- 4. Software Services Profit -->
+          <div class="analytics-card">
+            <div class="analytics-header">
+              <div class="analytics-icon icon-blue"><i class="fa-solid fa-laptop-code"></i></div>
+              <div>
+                <h4>أرباح خدمات السوفت وير</h4>
+                <p>FRP • فك حسابات • فورمات وتفليش</p>
+              </div>
+            </div>
+            <div class="analytics-value" id="statSoftwareProfit">0 د.ع</div>
+            <div class="analytics-sub">
+              <span>إجمالي المقبوض: <b id="statSoftwareRevenue">0 د.ع</b></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inventory Value & Sales Log -->
+        <div class="stats-secondary-grid mt-4">
+          <div class="card p-3">
+            <h3><i class="fa-solid fa-vault"></i> رأس مال المخزن وحركة البضائع</h3>
+            <div class="metric-row">
+              <span>قيمة رأس مال البضاعة بالمخزن (تكلفة الجملة):</span>
+              <strong id="statInventoryCost" class="text-warning">0 د.ع</strong>
+            </div>
+            <div class="metric-row">
+              <span>القيمة الإجمالية المتوقعة للبيع:</span>
+              <strong id="statInventoryRetail" class="text-info">0 د.ع</strong>
+            </div>
+            <div class="metric-row">
+              <span>إجمالي القطع المتوفرة بالمخزن:</span>
+              <strong id="statStockUnits" class="text-success">0 قطعة</strong>
+            </div>
+            <div class="metric-row">
+              <span>إجمالي القطع المباعة:</span>
+              <strong id="statSoldUnits" class="text-info">0 قطعة</strong>
+            </div>
+            <div class="metric-row">
+              <span>منتجات قاربت على النفاد:</span>
+              <strong id="statLowStockCount" class="text-danger">0</strong>
+            </div>
+          </div>
+
+          <div class="card p-3">
+            <div class="d-flex justify-between align-center mb-2">
+              <h3><i class="fa-solid fa-clock-rotate-left"></i> سجل آخر المبيعات</h3>
+              <select id="salesTimeFilter" onchange="loadRecentSales()" class="form-select form-select-sm">
+                <option value="all">كل الأوقات</option>
+                <option value="today">مبيعات اليوم</option>
+                <option value="week">آخر 7 أيام</option>
+                <option value="month">هذا الشهر</option>
+              </select>
+            </div>
+            <div class="table-scroll-box">
+              <table class="data-table data-table-sm">
+                <thead>
+                  <tr>
+                    <th>المنتج</th>
+                    <th>الكمية</th>
+                    <th>سعر البيع</th>
+                    <th>الخصم</th>
+                    <th>الربح</th>
+                    <th>إجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="recentSalesTableBody">
+                  <!-- Sales rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Smart Retail Analytics: Top Sellers & Dead Stock -->
+        <div class="stats-secondary-grid mt-4">
+          <!-- Top 5 Best Sellers -->
+          <div class="card p-3">
+            <div class="d-flex justify-between align-center mb-2">
+              <h3><i class="fa-solid fa-trophy text-warning"></i> الأكثر مبيعاً وتحقيقاً للأرباح (Top Sellers)</h3>
+              <span class="badge badge-success"><i class="fa-solid fa-fire"></i> قادة المبيعات</span>
+            </div>
+            <p class="text-muted" style="font-size:12px; margin-bottom:12px;">أكثر المنتجات طلباً وتوليداً للأرباح الصافية في المتجر</p>
+            <div class="top-sellers-list" id="topSellersList">
+              <!-- Top sellers rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Dead / Stagnant Stock Alert -->
+          <div class="card p-3">
+            <div class="d-flex justify-between align-center mb-2">
+              <h3><i class="fa-solid fa-triangle-exclamation text-danger"></i> المنتجات الراكدة ورأس المال المجمد (Dead Stock)</h3>
+              <span class="badge badge-warning" id="deadStockTiedCapital">رأس مال مجمد: 0 د.ع</span>
+            </div>
+            <p class="text-muted" style="font-size:12px; margin-bottom:12px;">بضائع متوفرة بالمخزن لم تسجل أي حركة بيع لاقتراح عمل خصومات وتخفيضات عليها</p>
+            <div class="dead-stock-list" id="deadStockList">
+              <!-- Dead stock rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 6: IMPORTED INVOICES -->
+      <!-- ============================================== -->
+      <section id="tab-invoices" class="tab-content">
+        <div class="d-flex justify-between align-center mb-3">
+          <div>
+            <h2><i class="fa-solid fa-file-invoice"></i> سجل فواتير الموردين المستوردة</h2>
+            <p class="text-muted">استيراد فواتير الـ PDF وتحليل الموديلات والأسعار تلقائياً</p>
+          </div>
+          <button class="btn btn-primary" onclick="showInvoiceModal()">
+            <i class="fa-solid fa-cloud-arrow-up"></i> + استيراد فاتورة جديدة
+          </button>
+        </div>
+
+        <div class="invoices-list-grid" id="invoicesListGrid">
+          <!-- Invoices list -->
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- TAB 7: SETTINGS & BACKUP -->
+      <!-- ============================================== -->
+      <section id="tab-settings" class="tab-content">
+        <div class="settings-card">
+          <h2><i class="fa-solid fa-sliders"></i> إعدادات النظام والمتجر</h2>
+          
+          <div class="form-group mt-3">
+            <label>اسم المحل / المتجر:</label>
+            <input type="text" id="settingStoreName" class="form-input" placeholder="MY Store">
+          </div>
+
+          <div class="form-group">
+            <label>حد تنبيه انخفاض المخزون (أقل من كم قطعة):</label>
+            <input type="number" id="settingLowStock" class="form-input" placeholder="2">
+          </div>
+
+          <button class="btn btn-primary" onclick="saveSettings()">
+            <i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات
+          </button>
+
+          <hr class="my-4">
+
+          <h3><i class="fa-solid fa-database"></i> النسخ الاحتياطي والأمان</h3>
+          <p class="text-muted">قم بتنزيل نسخة احتياطية من قاعدة البيانات والمنتجات والصيانة لحفظها على فلاش أو قرص خارجي.</p>
+          <a href="/api/backup" class="btn btn-outline" download>
+            <i class="fa-solid fa-download"></i> تنزيل نسخة احتياطية من قاعدة البيانات (Backup Database)
+          </a>
+        </div>
+      </section>
+
+    </main>
+    </div> <!-- /.main-wrapper -->
+
+    <!-- ============================================== -->
+    <!-- MODALS -->
+    <!-- ============================================== -->
+
+    <!-- 1. QUICK SELL CUSTOM PRICE MODAL -->
+    <div id="quickSellModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <button class="modal-close" onclick="closeQuickSellModal()">&times;</button>
+        <h3><i class="fa-solid fa-bolt"></i> بيع مباشر مع تعديل السعر / الخصم</h3>
+        
+        <div class="p-3 my-2 bg-card rounded">
+          <h4 id="qsProductName" class="text-info">اسم المنتج</h4>
+          <div class="d-flex justify-between mt-2 text-muted">
+            <span>سعر الجملة (التكلفة): <b id="qsProductCost">0 د.ع</b></span>
+            <span>السعر الافتراضي: <b id="qsProductDefaultPrice">0 د.ع</b></span>
+          </div>
+        </div>
+
+        <form id="quickSellForm" onsubmit="submitQuickSell(event)">
+          <input type="hidden" id="qsProductId">
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>الكمية المباعة:</label>
+              <input type="number" id="qsQuantity" class="form-input" value="1" min="1" required oninput="calcQuickSellProfit()">
+            </div>
+            <div class="form-group">
+              <label>سعر البيع للقطعة (د.ع):</label>
+              <input type="number" id="qsUnitPrice" class="form-input" required step="250" oninput="calcQuickSellProfit()">
+            </div>
+            <div class="form-group">
+              <label>خصم إضافي (د.ع):</label>
+              <input type="number" id="qsDiscount" class="form-input" value="0" min="0" step="250" oninput="calcQuickSellProfit()">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>اسم الزبون (اختياري):</label>
+              <input type="text" id="qsCustomerName" class="form-input" placeholder="زبون مباشر">
+            </div>
+            <div class="form-group">
+              <label>صافي ربح هذه البيعة:</label>
+              <div class="profit-box" id="qsProfitPreview">+0 د.ع</div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeQuickSellModal()">إلغاء</button>
+            <button type="submit" class="btn btn-success"><i class="fa-solid fa-check"></i> تأكيد البيع وخصم المخزون</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 2. HIGH-RES IMAGE LIGHTBOX & MULTI-BRAND OFFICIAL IMAGE PICKER -->
+    <div id="imageLightboxModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-image-viewer">
+        <button class="modal-close" onclick="closeImageModal()">&times;</button>
+        
+        <div class="image-viewer-body">
+          <!-- Left Column: Current Product Image & Manual Uploads -->
+          <div class="viewer-current-box">
+            <h3 id="viewerProductName" style="font-size:15px; margin-bottom:4px;">اسم المنتج</h3>
+            <span class="badge badge-brand mb-2" id="viewerProductModel">الموديل</span>
+            
+            <div class="viewer-img-container" id="viewerImgDropZone" title="اسحب أي صورة من المتصفح وأفلتها هنا مباشرة، أو اضغط Ctrl+V للصق!">
+              <img id="viewerImageElement" src="" alt="صورة المنتج الحالية">
+            </div>
+
+            <div class="d-flex flex-column gap-2 mt-auto">
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline btn-sm flex-1" onclick="pasteImageFromClipboard()" title="لصق صورة أو رابط من الحافظة مباشرة (Ctrl+V)">
+                  <i class="fa-solid fa-paste text-info"></i> لصق من الحافظة
+                </button>
+                <label class="btn btn-outline btn-sm flex-1 file-upload-btn">
+                  <i class="fa-solid fa-upload"></i> من الكمبيوتر
+                  <input type="file" id="viewerFileInput" accept="image/*" onchange="uploadProductImage(event)" style="display:none;">
+                </label>
+              </div>
+
+              <div class="input-group">
+                <input type="text" id="viewerUrlInput" placeholder="أو الصق رابط مخصص..." class="form-input form-input-sm" style="font-size:11px;">
+                <button class="btn btn-secondary btn-sm" onclick="applyImageUrl()"><i class="fa-solid fa-link"></i> حفظ</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Multi-Brand Live Online Search & Interactive Gallery Picker -->
+          <div class="brand-search-panel">
+            <div class="d-flex justify-between align-center">
+              <div>
+                <h4><i class="fa-solid fa-globe text-info"></i> جلب الصور الرسمية من مواقع الشركات العالمية</h4>
+                <p class="text-muted" style="font-size:12px;">ابحث عن الموديل في الموقع الرسمي لشركة المنتج واختر الصورة المناسبة بضغطة زر</p>
+              </div>
+            </div>
+
+            <!-- Search Controls: Brand Selector + Query Input + Search Button -->
+            <div class="search-bar-row">
+              <div class="form-group mb-0">
+                <select id="imgSearchBrand" class="form-select form-select-sm" onchange="performBrandImageSearch()">
+                  <option value="web" selected>🌐 بحث شامل في الويب (Global Web)</option>
+                  <option value="hoco">🏢 هوكو (hocotech.com)</option>
+                  <option value="borofone">🏢 بوروفون (borofone.com)</option>
+                  <option value="joyroom">🏢 جويروم (joyroom.com)</option>
+                  <option value="anker">🏢 أنكر (anker.com)</option>
+                  <option value="baseus">🏢 بيسوس (baseus.com)</option>
+                  <option value="remax">🏢 ريماكس (remax.hk)</option>
+                  <option value="acefast">🏢 آيسي فاست (acefast.com)</option>
+                  <option value="marshall">🏢 مارشال (Marshall)</option>
+                  <option value="samsung">📱 سامسونج (Samsung)</option>
+                  <option value="apple">🍏 آبل (Apple)</option>
+                  <option value="xiaomi">📱 شاومي (Xiaomi)</option>
+                </select>
+              </div>
+
+              <div class="form-group mb-0" style="flex: 2;">
+                <input type="text" id="imgSearchQuery" class="form-input form-input-sm" placeholder="أدخل الموديل أو الكود أو اسم المنتج (مثال: W112, JR-T03S, Anker 20W)..." onkeydown="if(event.key==='Enter') performBrandImageSearch()">
+              </div>
+
+              <button class="btn btn-primary btn-sm" onclick="performBrandImageSearch()" id="btnBrandSearch">
+                <i class="fa-solid fa-magnifying-glass"></i> بحث فوري (حتى 100 صورة)
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="openInGoogleLens()" title="فتح الصورة مباشرة في Google Lens للتعرف البصري">
+                <i class="fa-brands fa-google text-warning"></i> Google Lens
+              </button>
+            </div>
+
+            <div class="d-flex justify-between align-center" style="margin-top: 6px;">
+              <span id="imgResultsCountBadge" class="badge badge-success" style="display:none; font-size:11px;">0 صورة متوفرة</span>
+            </div>
+
+            <!-- Results Section -->
+            <div class="brand-results-container">
+              <!-- Loading state -->
+              <div id="imgSearchResultsLoading" class="loading-spinner" style="display:none; padding:30px;">
+                <i class="fa-solid fa-circle-notch fa-spin fa-2x"></i>
+                <div class="mt-2">جاري البحث الشامل في الويب واستخراج ما يصل إلى 100 صورة بجودة عالية...</div>
+              </div>
+
+              <!-- Empty / Hint state -->
+              <div id="imgSearchResultsEmpty" class="empty-state" style="display:none; padding:30px;">
+                <i class="fa-solid fa-image empty-icon"></i>
+                <p>لم يتم العثور على صور مطابقة لهذا البحث. جرب كتابة كود الموديل فقط أو تغيير خيار البحث.</p>
+              </div>
+
+              <!-- Live Images Grid -->
+              <div id="imgSearchResultsGrid" class="brand-images-grid">
+                <!-- Dynamically generated image cards -->
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. ADD / EDIT PRODUCT MODAL -->
+    <div id="productFormModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <button class="modal-close" onclick="closeProductModal()">&times;</button>
+        <h3 id="productModalTitle"><i class="fa-solid fa-plus-circle"></i> إضافة منتج جديد</h3>
+        
+        <form id="productForm" onsubmit="saveProduct(event)">
+          <input type="hidden" id="prodFormId">
+
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label>اسم المنتج الكامل: *</label>
+              <input type="text" id="prodFormName" class="form-input" required placeholder="مثال: سماعة هوكو بلوتوث EQ33">
+            </div>
+            <div class="form-group flex-1">
+              <label>كود الموديل: *</label>
+              <div class="input-group">
+                <input type="text" id="prodFormModel" class="form-input" required placeholder="مثال: EQ33" oninput="onProductModelInput()">
+                <button type="button" class="btn btn-outline btn-sm" onclick="searchWebImageForForm()" title="بحث عن صور المنتج في الويب فوراً">
+                  <i class="fa-solid fa-globe text-info"></i> صور
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>الصنف:</label>
+              <select id="prodFormCategory" class="form-select">
+                <option value="سماعات">سماعات</option>
+                <option value="كابلات">كابلات</option>
+                <option value="شواحن">شواحن</option>
+                <option value="محولات وتوصيلات">محولات وتوصيلات</option>
+                <option value="تخزين وفلاشات">تخزين وفلاشات</option>
+                <option value="حماية ولواصق شاشة">حماية ولواصق شاشة</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>الماركة / الشركة:</label>
+              <input type="text" id="prodFormBrand" list="brandList" class="form-input" value="Hoco" placeholder="اختر أو اكتب الماركة">
+              <datalist id="brandList">
+                <option value="Hoco">هوكو (Hoco)</option>
+                <option value="Borofone">بوروفون (Borofone)</option>
+                <option value="Joyroom">جويروم (Joyroom)</option>
+                <option value="Anker">أنكر (Anker)</option>
+                <option value="Baseus">بيسوس (Baseus)</option>
+                <option value="Remax">ريماكس (Remax)</option>
+                <option value="Acefast">آيسي فاست (Acefast)</option>
+                <option value="Marshall">مارشال (Marshall)</option>
+                <option value="Samsung">سامسونج (Samsung)</option>
+                <option value="Apple">آبل (Apple)</option>
+                <option value="Xiaomi">شاومي (Xiaomi)</option>
+                <option value="Diamond">دايموند (Diamond)</option>
+                <option value="VIP Glass">ماركة (VIP Glass)</option>
+              </datalist>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>سعر الجملة (التكلفة) د.ع: *</label>
+              <input type="number" id="prodFormCost" class="form-input" required placeholder="مثال: 8550" oninput="calcSuggestedPrices()">
+            </div>
+            <div class="form-group">
+              <label>سعر البيع للزبون (د.ع): *</label>
+              <input type="number" id="prodFormSelling" class="form-input" required placeholder="مثال: 12000">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>الكمية المشتراة الإجمالية: *</label>
+              <input type="number" id="prodFormTotalQty" class="form-input" required placeholder="5">
+            </div>
+            <div class="form-group" id="prodFormStockGroup" style="display:none;">
+              <label>المتبقي حالياً بالمخزن:</label>
+              <input type="number" id="prodFormStockQty" class="form-input">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>رابط الصورة أو مسارها:</label>
+            <div class="input-group">
+              <input type="text" id="prodFormImageUrl" class="form-input" placeholder="مسار صورة المنتج">
+              <label class="btn btn-outline">
+                <i class="fa-solid fa-camera"></i> رفع صورة
+                <input type="file" accept="image/*" onchange="uploadModalImage(event)" style="display:none;">
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>الباركود / ملاحظات:</label>
+            <input type="text" id="prodFormBarcode" class="form-input" placeholder="باركود المنتج">
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeProductModal()">إلغاء</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-save"></i> حفظ المنتج</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 4. ADD / EDIT REPAIR TICKET MODAL (With Unrepaired & Loss Options) -->
+    <div id="repairFormModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <button class="modal-close" onclick="closeRepairModal()">&times;</button>
+        <h3 id="repairModalTitle"><i class="fa-solid fa-screwdriver-wrench"></i> استلام وتعديل صيانة الجهاز</h3>
+
+        <form id="repairForm" onsubmit="saveRepair(event)">
+          <input type="hidden" id="repFormId">
+
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label>اسم الزبون: *</label>
+              <input type="text" id="repFormCustomerName" class="form-input" required placeholder="اسم الزبون الثلاثي">
+            </div>
+            <div class="form-group flex-1">
+              <label>رقم الهاتف: *</label>
+              <input type="tel" id="repFormCustomerPhone" class="form-input" required placeholder="07XXXXXXXXX">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>نوع الجهاز:</label>
+              <select id="repFormDeviceType" class="form-select">
+                <option value="هاتف ذكي">هاتف ذكي (موبايل)</option>
+                <option value="آيباد / تابلت">آيباد / تابلت</option>
+                <option value="حاسبة لابتوب">حاسبة لابتوب</option>
+                <option value="سماعة / ملحقات">سماعة / ملحقات</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>الموديل / الطراز: *</label>
+              <input type="text" id="repFormDeviceModel" class="form-input" required placeholder="مثال: iPhone 13 Pro Max">
+            </div>
+            <div class="form-group">
+              <label>رمز القفل (Passcode):</label>
+              <input type="text" id="repFormPasscode" class="form-input" placeholder="رمز القفل إن وجد">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>وصف المشكلة / العطل: *</label>
+            <textarea id="repFormIssue" class="form-input" rows="2" required placeholder="مثال: تبديل شاشة + تنظيف سوكت شحن"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>حالة الجهاز:</label>
+              <select id="repFormStatus" class="form-select" onchange="handleRepairStatusChange()">
+                <option value="pending">🟡 قيد الفحص</option>
+                <option value="in_progress">🔵 قيد العمل والتصليح</option>
+                <option value="ready">🟢 جاهز للاستلام</option>
+                <option value="delivered">✅ تم التسليم والمحاسبة</option>
+                <option value="unrepaired">❌ لم يتم التصليح</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>الفني المسؤول:</label>
+              <input type="text" id="repFormTechnician" class="form-input" value="فني الصيانة">
+            </div>
+          </div>
+
+          <!-- Normal Pricing Fields -->
+          <div id="repairNormalPriceFields">
+            <div class="form-row">
+              <div class="form-group">
+                <label>تكلفة قطع الغيار (د.ع):</label>
+                <input type="number" id="repFormPartsCost" class="form-input" placeholder="0" value="0" oninput="calcRepairProfitPreview()">
+              </div>
+              <div class="form-group">
+                <label>المبلغ المتفق عليه مع الزبون (د.ع): *</label>
+                <input type="number" id="repFormTotalCharge" class="form-input" placeholder="مثال: 35000" oninput="calcRepairProfitPreview()">
+              </div>
+              <div class="form-group">
+                <label>صافي ربح الصيانة:</label>
+                <div class="profit-box" id="repFormProfitPreview">+0 د.ع</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- UNREPAIRED / LOSS FIELDS (Appears only when "لم يتم التصليح" is selected) -->
+          <div id="repairLossFields" class="loss-alert-box" style="display:none;">
+            <h4><i class="fa-solid fa-triangle-exclamation"></i> تفاصيل عدم التصليح والخسائر المترتبة:</h4>
+            <div class="form-row mt-2">
+              <div class="form-group">
+                <label>تكاليف الخسارة المترتبة (د.ع):</label>
+                <input type="number" id="repFormLossCost" class="form-input" placeholder="0" value="0" oninput="calcRepairProfitPreview()">
+                <small class="text-muted">أجور فحص غير مستردة، أو قطعة تالفة أثناء الفحص</small>
+              </div>
+              <div class="form-group flex-2">
+                <label>سبب عدم التصليح والملاحظات: *</label>
+                <input type="text" id="repFormLossReason" class="form-input" placeholder="مثال: العطل في المعالج ولا يتوفر بديل / الزبون رفض السعر">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>ملاحظات إضافية:</label>
+            <input type="text" id="repFormNotes" class="form-input" placeholder="ملاحظات حول حالة الجهاز الخارجية">
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeRepairModal()">إلغاء</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> حفظ تذكرة الصيانة</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 5. ADD / EDIT SOFTWARE SERVICE MODAL -->
+    <div id="softwareFormModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <button class="modal-close" onclick="closeSoftwareModal()">&times;</button>
+        <h3 id="softwareModalTitle"><i class="fa-solid fa-laptop-code"></i> تسجيل خدمة سوفت وير جديدة</h3>
+
+        <form id="softwareForm" onsubmit="saveSoftwareService(event)">
+          <input type="hidden" id="sftFormId">
+
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label>اسم الزبون: *</label>
+              <input type="text" id="sftFormCustomerName" class="form-input" required placeholder="اسم الزبون">
+            </div>
+            <div class="form-group flex-1">
+              <label>رقم الهاتف: *</label>
+              <input type="tel" id="sftFormCustomerPhone" class="form-input" required placeholder="07XXXXXXXXX">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>نوع الجهاز وموديله: *</label>
+              <input type="text" id="sftFormDeviceModel" class="form-input" required placeholder="مثال: Samsung S22 Ultra أو Redmi Note 12">
+            </div>
+            <div class="form-group">
+              <label>نوع خدمة السوفت وير: *</label>
+              <select id="sftFormServiceType" class="form-select">
+                <option value="تخطي حساب جوجل (FRP Bypass)">تخطي حساب جوجل (FRP Bypass)</option>
+                <option value="فك / فتح حساب شاومي (Mi Account)">فك / فتح حساب شاومي (Mi Account)</option>
+                <option value="إنشاء وضبط حساب رسمي (Apple ID / Google)">إنشاء وضبط حساب رسمي (Apple ID / Google)</option>
+                <option value="فورمات وتحديث نظام (Flash / Update)">فورمات وتحديث نظام (Flash / Update)</option>
+                <option value="حذف إعلانات وفيروسات وتنظيف النظام">حذف إعلانات وفيروسات وتنظيف النظام</option>
+                <option value="فك شفرة شبكة / روت / إصلاح سيريال">فك شفرة شبكة / روت / إصلاح سيريال</option>
+                <option value="أخرى">خدمة سوفت وير أخرى</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>تكلفة السيرفر / الكريديت والأدوات (د.ع):</label>
+              <input type="number" id="sftFormToolCost" class="form-input" placeholder="0" value="0" oninput="calcSoftwareProfitPreview()">
+              <small class="text-muted">تكلفة سيرفر الأونلاين أو كريديت الأداة</small>
+            </div>
+            <div class="form-group">
+              <label>المبلغ المستلم من الزبون (د.ع): *</label>
+              <input type="number" id="sftFormTotalCharge" class="form-input" required placeholder="مثال: 20000" oninput="calcSoftwareProfitPreview()">
+            </div>
+            <div class="form-group">
+              <label>صافي ربح السوفت وير:</label>
+              <div class="profit-box" id="sftFormProfitPreview">+0 د.ع</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>حالة العملية:</label>
+              <select id="sftFormStatus" class="form-select">
+                <option value="completed">✅ تم الإنجاز بنجاح واستلام المبلغ</option>
+                <option value="in_progress">🔵 قيد المعالجة والسيرفر</option>
+                <option value="failed">❌ فشل السيرفر / تم الإلغاء</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>فني السوفت وير:</label>
+              <input type="text" id="sftFormTechnician" class="form-input" value="فني السوفت وير">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>ملاحظات السيرفر / الإيميل المنشأ:</label>
+            <input type="text" id="sftFormNotes" class="form-input" placeholder="ملاحظات حول العملية أو اسم الحساب المنشأ">
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeSoftwareModal()">إلغاء</button>
+            <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> حفظ خدمة السوفت وير</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 6. PDF INVOICE IMPORTER MODAL -->
+    <div id="invoiceImportModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-lg">
+        <button class="modal-close" onclick="closeInvoiceModal()">&times;</button>
+        <h3><i class="fa-solid fa-file-pdf"></i> استيراد فواتير البضائع (PDF)</h3>
+        
+        <div class="invoice-upload-area" id="invoiceDropZone">
+          <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+          <h4>اسحب وأفلت ملف فاتورة PDF هنا أو اضغط للاختيار</h4>
+          <p class="text-muted">يقوم النظام بقراءة أسعار وموديلات الفاتورة وتعيين الصور الدقيقة تلقائياً</p>
+          <input type="file" id="pdfFileInput" accept=".pdf" onchange="handlePdfFileUpload(event)" style="display:none;">
+          <button class="btn btn-outline mt-2" onclick="document.getElementById('pdfFileInput').click()">
+            <i class="fa-solid fa-folder-open"></i> اختيار ملف من الجهاز
+          </button>
+          <div class="mt-3">
+            <button class="btn btn-success" onclick="importDefaultInvoice()">
+              <i class="fa-solid fa-bolt"></i> قراءة فاتورة هوكو المرفقة (مركز sigma-1.pdf) فوراً
+            </button>
+          </div>
+        </div>
+
+        <div id="invoiceParseLoading" class="loading-spinner my-4" style="display:none;">
+          <i class="fa-solid fa-circle-notch fa-spin"></i> جاري استخراج البيانات والموديلات وتعيين الصور...
+        </div>
+
+        <!-- Preview Extracted Items -->
+        <div id="invoicePreviewSection" style="display:none;" class="mt-4">
+          <div class="d-flex justify-between align-center mb-2">
+            <div>
+              <h4 id="previewInvoiceTitle">معاينة المواد المستخرجة</h4>
+              <span class="text-muted" id="previewInvoiceDetails">فاتورة رقم: 9100</span>
+            </div>
+            <button class="btn btn-primary btn-lg" onclick="confirmImportProducts()" id="btnConfirmImport">
+              <i class="fa-solid fa-circle-check"></i> اعتماد وحفظ الكل في المخزن
+            </button>
+          </div>
+
+          <div class="table-scroll-box" style="max-height: 380px;">
+            <table class="data-table data-table-sm">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>الصورة</th>
+                  <th>الموديل</th>
+                  <th>الاسم والمواصفات</th>
+                  <th>الصنف</th>
+                  <th>الكمية</th>
+                  <th>سعر الجملة (التكلفة)</th>
+                  <th>سعر البيع للزبون</th>
+                  <th>إجمالي الشراء</th>
+                </tr>
+              </thead>
+              <tbody id="previewInvoiceTableBody">
+                <!-- Preview Rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 8. RECORD DEBT PAYMENT MODAL -->
+    <div id="debtPaymentModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card" style="max-width: 500px;">
+        <button class="modal-close" onclick="closeDebtPaymentModal()">&times;</button>
+        <h3><i class="fa-solid fa-hand-holding-dollar text-success"></i> تسجيل سداد دفعة من الدين</h3>
+        
+        <div class="p-3 my-2 bg-card rounded">
+          <div class="d-flex justify-between">
+            <span class="text-muted">اسم العميل:</span>
+            <strong id="payModalCustomerName" class="text-info">-</strong>
+          </div>
+          <div class="d-flex justify-between mt-1">
+            <span class="text-muted">إجمالي الدين:</span>
+            <span id="payModalTotalDebt">0 د.ع</span>
+          </div>
+          <div class="d-flex justify-between mt-1">
+            <span class="text-muted">المبلغ المتبقي الحالي:</span>
+            <strong id="payModalRemainingDebt" class="text-danger" style="font-size:16px;">0 د.ع</strong>
+          </div>
+        </div>
+
+        <form id="debtPaymentForm" onsubmit="submitDebtPayment(event)">
+          <input type="hidden" id="payModalDebtId">
+
+          <div class="form-group">
+            <label>المبلغ المسدد الآن (د.ع): *</label>
+            <input type="number" id="payModalAmount" class="form-input" required min="250" step="250" placeholder="أدخل المبلغ المسدد">
+          </div>
+
+          <div class="form-group">
+            <label>ملاحظات السداد / طريقة الدفع:</label>
+            <input type="text" id="payModalNotes" class="form-input" placeholder="مثال: تسديد نقدي مباشر بالمحل / تحويل">
+          </div>
+
+          <div class="modal-actions mt-3">
+            <button type="button" class="btn btn-secondary" onclick="closeDebtPaymentModal()">إلغاء</button>
+            <button type="submit" class="btn btn-success"><i class="fa-solid fa-check"></i> تأكيد وحفظ السداد</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 9. CUSTOMER DEBT STATEMENT MODAL -->
+    <div id="debtStatementModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card" style="max-width: 650px;">
+        <button class="modal-close" onclick="closeDebtStatementModal()">&times;</button>
+        <div class="d-flex justify-between align-center mb-2">
+          <h3><i class="fa-solid fa-file-invoice text-info"></i> كشف حساب ديون العميل</h3>
+          <button class="btn btn-sm btn-outline" onclick="printDebtStatement()"><i class="fa-solid fa-print"></i> طباعة كشف الحساب</button>
+        </div>
+
+        <div id="debtStatementContent" class="p-3 bg-card rounded mb-3">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <h4><i class="fa-solid fa-clock-rotate-left"></i> سجل الدفعات المسددة</h4>
+        <div class="table-scroll-box mt-2" style="max-height: 220px;">
+          <table class="data-table data-table-sm">
+            <thead>
+              <tr>
+                <th>تاريخ الدفعة</th>
+                <th>المبلغ المسدد</th>
+                <th>ملاحظات الدفعة</th>
+              </tr>
+            </thead>
+            <tbody id="debtStatementPaymentsBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10. TOAST NOTIFICATION CONTAINER -->
+    <div id="toastContainer" class="toast-container"></div>
+
+  </div>
+
+  <!-- Application Scripts -->
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.secure_backups/
+*.log
+*.db-shm
+*.db-wal
+*.lnk
+.DS_Store
+Thumbs.db
