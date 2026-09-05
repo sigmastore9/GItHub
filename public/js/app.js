@@ -2841,5 +2841,21 @@ async function updateOnlineOrderStatus(orderId, newStatus) {
   }
 }
 
+// 1-Click One-Touch GitHub Cloud Store Synchronization
+async function syncWithGitHubCloud() {
+  showToast('⏳ جاري تصدير ومزامنة المنتجات مع موقع GitHub...', 'info');
+  try {
+    const res = await fetch('/api/sync/github', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅ ' + data.message, 'success');
+    } else {
+      showToast(data.message || 'حدث خطأ أثناء المزامنة', 'error');
+    }
+  } catch (err) {
+    showToast('فشل في الاتصال بالسيرفر للمزامنة', 'error');
+  }
+}
+
 
 

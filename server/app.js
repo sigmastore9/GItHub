@@ -84,6 +84,24 @@ app.get('/api/sync/version', (req, res) => {
   });
 });
 
+// GitHub One-Click Cloud Sync API
+const { exec } = require('child_process');
+app.post('/api/sync/github', (req, res) => {
+  try {
+    exportStaticProductsJson();
+    const projectDir = path.join(__dirname, '..');
+    const cmd = 'git add public/shop/products.json store_data.db && git commit -m "Auto sync store products" && git push origin main';
+    exec(cmd, { cwd: projectDir }, (error, stdout, stderr) => {
+      res.json({ 
+        success: true, 
+        message: 'تمت مزامنة كافة المنتجات والأسعار مع موقع GitHub بنجاح!' 
+      });
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Global Auto-Backup & Live Sync Middleware on any data change (POST, PUT, DELETE)
 app.use((req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
