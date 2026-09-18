@@ -318,8 +318,8 @@
       "brand": "Hoco",
       "selling_price": 2000,
       "stock_quantity": 10,
-      "image_url": "/itemsMedia/M104_White.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1789748074743-497788075.jpg",
+      "updated_at": "2026-09-18 16:14:34"
     },
     {
       "id": 1,
@@ -337,5 +337,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-18T16:13:59.427Z"
+  "updated_at": "2026-09-18T16:14:37.766Z"
 }
