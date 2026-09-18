@@ -230,8 +230,8 @@
       "brand": "Hoco",
       "selling_price": 6500,
       "stock_quantity": 5,
-      "image_url": "/itemsMedia/HB1A.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1789747970062-76526791.jpg",
+      "updated_at": "2026-09-18 16:12:50"
     },
     {
       "id": 9,
@@ -337,5 +337,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-18T16:12:29.853Z"
+  "updated_at": "2026-09-18T16:12:53.091Z"
 }
