@@ -263,8 +263,8 @@
       "brand": "Hoco",
       "selling_price": 13500,
       "stock_quantity": 3,
-      "image_url": "/itemsMedia/CS27B.jpg",
-      "updated_at": "2026-09-02 07:37:43"
+      "image_url": "/uploads/image-1789748036406-929395845.webp",
+      "updated_at": "2026-09-18 16:13:56"
     },
     {
       "id": 6,
@@ -337,5 +337,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-18T16:13:26.476Z"
+  "updated_at": "2026-09-18T16:13:59.427Z"
 }
