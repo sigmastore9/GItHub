@@ -250,10 +250,10 @@
       "model": "CS27B TC-TC",
       "category": "شواحن",
       "brand": "Hoco",
-      "selling_price": 13500,
+      "selling_price": 13000,
       "stock_quantity": 2,
       "image_url": "/uploads/image-1789748036406-929395845.webp",
-      "updated_at": "2026-09-19 06:37:43"
+      "updated_at": "2026-09-19 06:48:29"
     },
     {
       "id": 6,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:48:16.746Z"
+  "updated_at": "2026-09-19T06:48:32.522Z"
 }
