@@ -19,10 +19,10 @@
       "model": "C155B TC-TC",
       "category": "شواحن",
       "brand": "Hoco",
-      "selling_price": 4750,
+      "selling_price": 5000,
       "stock_quantity": 4,
       "image_url": "/uploads/image-1788455563011-491086276.jpg",
-      "updated_at": "2026-09-19 06:38:07"
+      "updated_at": "2026-09-19 06:38:23"
     },
     {
       "id": 28,
@@ -337,5 +337,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:38:10.188Z"
+  "updated_at": "2026-09-19T06:38:26.612Z"
 }
