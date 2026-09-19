@@ -52,10 +52,10 @@
       "model": "لاصق جام ماركة",
       "category": "حماية ولواصق شاشة",
       "brand": "VIP Glass",
-      "selling_price": 4250,
+      "selling_price": 5000,
       "stock_quantity": 5,
       "image_url": "/uploads/brand-img-1788596367991-791.png",
-      "updated_at": "2026-09-05 08:19:29"
+      "updated_at": "2026-09-19 06:50:03"
     },
     {
       "id": 25,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:49:57.830Z"
+  "updated_at": "2026-09-19T06:50:06.913Z"
 }
