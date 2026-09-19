@@ -206,10 +206,10 @@
       "model": "HB51",
       "category": "محولات وتوصيلات",
       "brand": "Hoco",
-      "selling_price": 23000,
+      "selling_price": 20000,
       "stock_quantity": 2,
       "image_url": "/uploads/image-1789747946831-846260879.webp",
-      "updated_at": "2026-09-18 16:12:26"
+      "updated_at": "2026-09-19 06:49:13"
     },
     {
       "id": 10,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:49:08.270Z"
+  "updated_at": "2026-09-19T06:49:16.887Z"
 }
