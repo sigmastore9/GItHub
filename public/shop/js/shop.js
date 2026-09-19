@@ -21,11 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initLiveSync();
 });
 
-// Telegram Notification Configuration
-const TG_CONFIG = {
-  token: '8751504494:AAFQhkPA4lX2rFNKDVsdziD1-td03hfgD48',
-  chatIds: ['1390419753'] // Mohammed + friend can be added
-};
+// Telegram notifications are dispatched by the server when the order is saved.
+// A bot token in browser code is readable by every visitor, so it never lives here.
 
 // Dynamic Asset URL Resolver for GitHub Pages & Local
 function resolveAssetUrl(url) {
@@ -77,6 +74,37 @@ async function loadStoreSettings() {
       }
     }
   } catch (e) {}
+}
+
+// Folds the spellings Arabic shoppers mix freely, so "سماعه" finds "سماعة".
+// The storefront filters in the browser, so it needs its own copy of the same
+// folding the server applies to its LIKE queries.
+const ARABIC_FOLDINGS = [
+  ['أ', 'ا'], ['إ', 'ا'], ['آ', 'ا'], ['ٱ', 'ا'],
+  ['ة', 'ه'], ['ى', 'ي'], ['ؤ', 'و'], ['ئ', 'ي'],
+  ['ـ', ''],
+  ['ً', ''], ['ٌ', ''], ['ٍ', ''],
+  ['َ', ''], ['ُ', ''], ['ِ', ''],
+  ['ّ', ''], ['ْ', '']
+];
+
+function foldArabic(text) {
+  let out = String(text || '');
+  for (const [from, to] of ARABIC_FOLDINGS) {
+    out = out.split(from).join(to);
+  }
+  return out.toLowerCase().trim();
+}
+
+// Escapes text before it goes into innerHTML
+function escapeShopHtml(value) {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // Format Currency
@@ -174,6 +202,8 @@ async function loadShopProducts(isSilent = false) {
 
     if (data && data.success && data.products) {
       shopState.products = data.products;
+      // Prices and stock may have moved since the cart was saved
+      reconcileCartWithCatalogue();
       applyShopFilters(isSilent);
       syncHeroBanner(data.products);
     } else {
@@ -198,12 +228,12 @@ function applyShopFilters(isSilent = false) {
 
   // 2. Search Query Filter
   if (shopState.searchQuery.trim()) {
-    const q = shopState.searchQuery.trim().toLowerCase();
-    list = list.filter(p => 
-      p.name.toLowerCase().includes(q) ||
-      (p.model && p.model.toLowerCase().includes(q)) ||
-      (p.brand && p.brand.toLowerCase().includes(q)) ||
-      (p.category && p.category.toLowerCase().includes(q))
+    const q = foldArabic(shopState.searchQuery);
+    list = list.filter(p =>
+      foldArabic(p.name).includes(q) ||
+      foldArabic(p.model).includes(q) ||
+      foldArabic(p.brand).includes(q) ||
+      foldArabic(p.category).includes(q)
     );
   }
 
@@ -239,7 +269,7 @@ function renderShopProductsGrid(isSilent = false) {
   const fragment = document.createDocumentFragment();
 
   shopState.filteredProducts.forEach(p => {
-    const fallbackImg = resolveAssetUrl('/images/products/eq33.jpg');
+    const fallbackImg = resolveAssetUrl('/images/products/EQ33.jpg');
     // Append updated_at timestamp to bust browser cache immediately upon image change!
     const v = p.updated_at ? encodeURIComponent(p.updated_at) : Date.now();
     const rawImg = p.image_url ? (p.image_url.includes('?') ? p.image_url : `${p.image_url}?v=${v}`) : fallbackImg;
@@ -385,6 +415,10 @@ function showLiveSyncPill() {
   }, 2200);
 }
 
+// True while the SSE stream is delivering updates; the polling fallback stands
+// down whenever this is set so the two channels never duplicate each other.
+let sseConnected = false;
+
 // Real-Time Live Sync System (BroadcastChannel + SSE + Polling Fallback)
 function initLiveSync() {
   // If running on static GitHub Pages hosting, disable background SSE and polling loops to prevent hanging!
@@ -408,37 +442,47 @@ function initLiveSync() {
   if (typeof EventSource !== 'undefined') {
     try {
       const eventSource = new EventSource('/api/sync/events');
+      eventSource.onopen = () => { sseConnected = true; };
       eventSource.onmessage = (e) => {
+        sseConnected = true;
         try {
           const data = JSON.parse(e.data);
           if (data.type === 'PRODUCT_UPDATED' || data.type === 'DATA_CHANGED') {
-            console.log('📡 [Live Sync]: Real-time update received from server', data);
             loadShopProducts(true);
             loadStoreSettings();
           }
         } catch (err) {}
       };
       eventSource.onerror = () => {
-        // SSE handles reconnection automatically
+        // Hand the job back to the polling fallback until SSE reconnects
+        sseConnected = false;
       };
     } catch (e) {}
   }
 
-  // 3. Heartbeat Polling Fallback (every 4 seconds) to guarantee zero desync even if sleep/wake
+  // 3. Heartbeat polling — a FALLBACK, not a second live channel.
+  // It used to fire every 4s unconditionally (about 900 requests an hour on a
+  // shopper's phone) even while the SSE stream was already delivering updates and
+  // even while the tab sat in the background. Now it only runs when SSE is not
+  // carrying the load, and it pauses whenever the page is hidden.
   let lastSeenVersion = 0;
-  setInterval(async () => {
+
+  const checkVersion = async () => {
+    if (document.hidden) return;
+    if (sseConnected) return;
     try {
       const res = await fetch('/api/sync/version');
       const data = await res.json();
       if (data.success && data.version) {
         if (lastSeenVersion && data.version !== lastSeenVersion) {
-          console.log('🔄 [Live Sync]: Version change detected via heartbeat', data.version);
           loadShopProducts(true);
         }
         lastSeenVersion = data.version;
       }
     } catch (e) {}
-  }, 4000);
+  };
+
+  setInterval(checkVersion, 20000);
 
   // 4. Page Focus / Tab Visibility Trigger
   document.addEventListener('visibilitychange', () => {
@@ -543,9 +587,13 @@ function addQvToCart() {
 }
 
 // 4. Cart Management & Drawer
+const CART_STORAGE_KEY = 'sigmastore_cart';
+const LEGACY_CART_STORAGE_KEY = 'mystore_cart';
+
 function loadCartFromStorage() {
   try {
-    const saved = localStorage.getItem('mystore_cart') || localStorage.getItem('sigmastore_cart');
+    // Fall back to the legacy key so carts saved before the rename survive
+    const saved = localStorage.getItem(CART_STORAGE_KEY) || localStorage.getItem(LEGACY_CART_STORAGE_KEY);
     if (saved) {
       shopState.cart = JSON.parse(saved) || [];
     }
@@ -557,7 +605,8 @@ function loadCartFromStorage() {
 
 function saveCartToStorage() {
   try {
-    localStorage.setItem('mystore_cart', JSON.stringify(shopState.cart));
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(shopState.cart));
+    localStorage.removeItem(LEGACY_CART_STORAGE_KEY);
   } catch (e) {}
   updateCartBadge();
   renderCartDrawer();
@@ -570,10 +619,42 @@ function addToCartById(productId) {
   showShopToast(`تمت إضافة [${p.model || p.name}] إلى سلتك`, 'success');
 }
 
+function availableStock(product) {
+  const s = product.stock_quantity;
+  // Older exports may omit the field; treat that as "no limit known"
+  return (s === undefined || s === null) ? Infinity : s;
+}
+
 function addItemToCart(product, qty = 1) {
+  const limit = availableStock(product);
+  if (limit <= 0) {
+    showShopToast(`${product.model || product.name} غير متوفر حالياً`, 'error');
+    return false;
+  }
+
   const existing = shopState.cart.find(item => item.id === product.id);
+  const current = existing ? existing.qty : 0;
+
+  // The cart used to accept any quantity, so a shopper could order 61 of a
+  // product with 10 in stock and only discover it after filling in the whole
+  // checkout form. Cap it here, where they can still react.
+  if (current + qty > limit) {
+    const room = limit - current;
+    if (room <= 0) {
+      showShopToast(`لا تتوفر كمية إضافية من ${product.model || product.name} (الحد ${limit})`, 'error');
+      return false;
+    }
+    qty = room;
+    showShopToast(`الكمية المتوفرة ${limit} فقط، تمت إضافة ${room}`, 'error');
+  }
+
   if (existing) {
     existing.qty += qty;
+    // Always take the live price, never the one frozen when it was added
+    existing.price = product.selling_price;
+    existing.name = product.name;
+    existing.model = product.model;
+    existing.image_url = product.image_url;
   } else {
     shopState.cart.push({
       id: product.id,
@@ -585,6 +666,63 @@ function addItemToCart(product, qty = 1) {
     });
   }
   saveCartToStorage();
+  return true;
+}
+
+// Brings a cart restored from localStorage back in line with the live catalogue:
+// refreshes prices and names, drops products that no longer exist, and trims
+// quantities down to what is actually on the shelf. Without this the shopper can
+// see one total while the server records another.
+function reconcileCartWithCatalogue() {
+  if (!shopState.cart.length || !shopState.products.length) return;
+
+  const notices = [];
+  const reconciled = [];
+
+  for (const item of shopState.cart) {
+    const live = shopState.products.find(p => p.id === item.id);
+
+    if (!live) {
+      notices.push(`${item.model || item.name} لم يعد متوفراً وأُزيل من سلتك`);
+      continue;
+    }
+
+    const limit = availableStock(live);
+    if (limit <= 0) {
+      notices.push(`${live.model || live.name} نفد من المخزن وأُزيل من سلتك`);
+      continue;
+    }
+
+    if (Number(item.price) !== Number(live.selling_price)) {
+      notices.push(`تغيّر سعر ${live.model || live.name} إلى ${formatIQD(live.selling_price)}`);
+    }
+
+    let qty = item.qty;
+    if (qty > limit) {
+      notices.push(`الكمية المتوفرة من ${live.model || live.name} أصبحت ${limit}`);
+      qty = limit;
+    }
+
+    reconciled.push({
+      id: live.id,
+      name: live.name,
+      model: live.model,
+      price: live.selling_price,
+      image_url: live.image_url,
+      qty
+    });
+  }
+
+  const changed =
+    reconciled.length !== shopState.cart.length ||
+    reconciled.some((r, i) => r.price !== shopState.cart[i].price || r.qty !== shopState.cart[i].qty);
+
+  shopState.cart = reconciled;
+
+  if (changed) {
+    saveCartToStorage();
+    notices.slice(0, 3).forEach((msg, i) => setTimeout(() => showShopToast(msg, 'error'), i * 900));
+  }
 }
 
 function updateCartItemQty(index, delta) {
@@ -764,66 +902,47 @@ async function submitCustomerOrder(event) {
       totalAmount
     };
 
-    // 1. Try local server endpoint if available
+    // 1. Try local server endpoint if available.
+    // A rejection from the server (out of stock, bad data) must stop the order.
+    // A network failure only means we are on static hosting with no backend,
+    // where the WhatsApp/Telegram route is the real order channel — so continue.
     try {
       const res = await fetch('/api/shop/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.orderNumber) {
-          orderNumber = data.orderNumber;
-        }
+
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+
+      if (!res.ok || (data && data.success === false)) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> تأكيد وإرسال الطلب';
+        showShopToast((data && data.message) || 'تعذر إتمام الطلب، يرجى المحاولة مرة أخرى', 'error');
+        loadShopProducts(true);
+        return;
       }
-    } catch (_) {}
 
-    // 2. Send instant Telegram Notification to Mohammed & team
-    try {
-      let itemsList = '';
-      shopState.cart.forEach((it, idx) => {
-        itemsList += `\n${idx + 1}. *${it.model ? `[${it.model}] ` : ''}${it.name}*\n   ▫️ الكمية: ${it.qty} قطعة | السعر: ${formatIQD(it.price * it.qty)}`;
-      });
-
-      const phoneIntl = getIraqiPhoneInternational(customer_phone);
-      const tgMsg = `🔔 *طلب شراء جديد من متجر Sigma Store!*
-━━━━━━━━━━━━━━━━━━
-🔢 *رقم الطلب:* #${orderNumber}
-👤 *اسم الزبون:* ${customer_name}
-📞 *رقم الهاتف:* \`${customer_phone}\` (${detectCarrier(customer_phone)})
-📍 *الموقع:* ذي قار - ${district} (${address})
-${notes ? `📝 *ملاحظات:* ${notes}\n` : ''}━━━━━━━━━━━━━━━━━━
-🛒 *المنتجات المطلوبة:*${itemsList}
-━━━━━━━━━━━━━━━━━━
-💰 *المجموع الكلي:* *${formatIQD(totalAmount)}*
-⏰ *تاريخ ووقت الطلب:* ${new Date().toLocaleString('ar-IQ')}
-━━━━━━━━━━━━━━━━━━
-💬 [مراسلة الزبون بالواتساب مباشرة](https://wa.me/${phoneIntl}?text=${encodeURIComponent(`مرحباً أخي ${customer_name}، بخصوص طلبك رقم #${orderNumber} من متجر Sigma Store...`)})`;
-
-      for (const cid of TG_CONFIG.chatIds) {
-        try {
-          await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: cid,
-              text: tgMsg,
-              parse_mode: 'Markdown'
-            })
-          });
-        } catch (e) {
-          console.warn('Telegram notification failed for chat:', cid, e);
-        }
+      if (data && data.orderNumber) {
+        orderNumber = data.orderNumber;
       }
-    } catch (e) {
-      console.warn('Telegram process error:', e);
+    } catch (_) {
+      // No backend reachable (static hosting): fall through to the notification path
     }
+
+    // 2. The server sends the Telegram alert when it saves the order, so the bot
+    // token stays on the server and out of this file.
 
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-check"></i> تأكيد وإرسال الطلب';
 
     // 3. Complete order flow on client
+    // Remember the shopper so the next checkout is pre-filled. openCheckoutModal()
+    // already reads this session, but nothing ever wrote it, so returning
+    // customers had to retype everything.
+    saveCustomerSession({ name: customer_name, phone: customer_phone, district, address });
+
     closeCheckoutModal();
     clearFullCart();
     
@@ -897,14 +1016,14 @@ async function searchCustomerRepair() {
         <div class="track-result-card">
           <div class="d-flex justify-between align-center mb-3">
             <div>
-              <h3 style="font-size:15px;"><i class="fa-solid fa-wrench text-blue"></i> تذكرة صيانة رقم: #${rep.ticket_number}</h3>
-              <span class="text-muted">الزبون: ${rep.customer_name}</span>
+              <h3 style="font-size:15px;"><i class="fa-solid fa-wrench text-blue"></i> تذكرة صيانة رقم: #${escapeShopHtml(rep.ticket_number)}</h3>
+              <span class="text-muted">الزبون: ${escapeShopHtml(rep.customer_name)}</span>
             </div>
             <span class="track-status-pill" style="background:${st.bg}; color:${st.color};">${st.text}</span>
           </div>
 
-          <div class="track-row"><span>نوع وموديل الجهاز:</span> <strong>${rep.device_type} - ${rep.device_model}</strong></div>
-          <div class="track-row"><span>وصف المشكلة:</span> <span>${rep.issue_description}</span></div>
+          <div class="track-row"><span>نوع وموديل الجهاز:</span> <strong>${escapeShopHtml(rep.device_type)} - ${escapeShopHtml(rep.device_model)}</strong></div>
+          <div class="track-row"><span>وصف المشكلة:</span> <span>${escapeShopHtml(rep.issue_description)}</span></div>
           <div class="track-row"><span>المبلغ المتفق عليه:</span> <strong class="text-blue">${formatIQD(rep.total_charge)}</strong></div>
           <div class="track-row"><span>تاريخ الاستلام:</span> <small class="text-muted">${new Date(rep.received_at).toLocaleDateString('ar-IQ')}</small></div>
         </div>
@@ -937,15 +1056,13 @@ function showShopToast(msg, type = 'success') {
 }
 
 // ==========================================================
-// 8. CUSTOMER ACCOUNTS, PHONE VERIFICATION (OTP) & PORTAL
 // ==========================================================
+// 8. IRAQI PHONE HELPERS & CUSTOMER SESSION
+// ==========================================================
+// The customer-account / OTP portal was reverted (commit 6c2f814) and its ~670
+// lines referenced DOM elements that no longer exist. Only the helpers the live
+// checkout flow actually calls are kept here.
 
-let currentOtpCode = null;
-let otpCountdownTimer = null;
-let pendingAuthData = null;
-let otpCountdownSeconds = 60;
-
-// Phone number parsing & strict Iraqi carrier validation
 function cleanIraqiPhone(phone) {
   if (!phone) return '';
   let p = phone.replace(/[\s\-\+\(\)]/g, '');
@@ -956,7 +1073,7 @@ function cleanIraqiPhone(phone) {
 
 function isValidIraqiPhone(phone) {
   const p = cleanIraqiPhone(phone);
-  // Iraqi numbers start with 07 followed by 7, 8, 9, or 5, and exactly 11 digits total
+  // Iraqi numbers start with 07 followed by 3-9, and are exactly 11 digits total
   return /^(07[3-9]\d{8})$/.test(p);
 }
 
@@ -970,203 +1087,7 @@ function detectCarrier(phone) {
   return 'رقم هاتف عراقي غير معروف';
 }
 
-function formatAndValidateIraqiPhone(input) {
-  let val = input.value.replace(/\D/g, '');
-  if (val.startsWith('964')) val = '0' + val.slice(3);
-  if (val.length > 11) val = val.slice(0, 11);
-  input.value = val;
-  const hintEl = document.getElementById('phoneCarrierHint');
-  if (hintEl) {
-    if (val.length >= 3) {
-      const carrier = detectCarrier(val);
-      hintEl.textContent = carrier;
-      hintEl.style.color = carrier.includes('غير') ? '#ef4444' : '#38bdf8';
-    } else {
-      hintEl.textContent = 'أدخل 11 رقماً تبدأ بـ 078 أو 077 أو 075';
-      hintEl.style.color = '';
-    }
-  }
-}
-
-// Session Management (Stored securely in localStorage & IndexedDB)
-function getCustomerSession() {
-  try {
-    const raw = localStorage.getItem('sigmastore_customer_session');
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch(e) {
-    return null;
-  }
-}
-
-function saveCustomerSession(cust) {
-  try {
-    localStorage.setItem('sigmastore_customer_session', JSON.stringify(cust));
-  } catch(e) {}
-}
-
-function clearCustomerSession() {
-  try {
-    localStorage.removeItem('sigmastore_customer_session');
-  } catch(e) {}
-}
-
-function initCustomerAuthSession() {
-  updateHeaderAccountUI();
-}
-
-function updateHeaderAccountUI() {
-  const cust = getCustomerSession();
-  const headerBtn = document.getElementById('headerAccountBtn');
-  const headerText = document.getElementById('headerAccountText');
-  const mNavText = document.getElementById('mNavAccountText');
-
-  if (cust && cust.is_verified) {
-    const firstName = cust.name ? cust.name.split(' ')[0] : 'حسابي';
-    if (headerText) headerText.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> ${firstName}`;
-    if (headerBtn) headerBtn.classList.add('logged-in');
-    if (mNavText) mNavText.textContent = firstName;
-  } else {
-    if (headerText) headerText.textContent = 'حسابي';
-    if (headerBtn) headerBtn.classList.remove('logged-in');
-    if (mNavText) mNavText.textContent = 'حسابي';
-  }
-}
-
-function handleAccountBtnClick() {
-  const cust = getCustomerSession();
-  if (cust && cust.is_verified) {
-    openPortalModal();
-  } else {
-    openAuthModal();
-  }
-}
-
-// Auth Modal (Step 1 & Step 2 OTP)
-function openAuthModal(prefill = {}) {
-  const cust = getCustomerSession() || {};
-  if (document.getElementById('authNameInput')) {
-    document.getElementById('authNameInput').value = prefill.name || cust.name || '';
-  }
-  if (document.getElementById('authPhoneInput')) {
-    document.getElementById('authPhoneInput').value = prefill.phone || cust.phone || '';
-  }
-  if (document.getElementById('authDistrictInput') && (prefill.district || cust.district)) {
-    document.getElementById('authDistrictInput').value = prefill.district || cust.district;
-  }
-  if (document.getElementById('authAddressInput')) {
-    document.getElementById('authAddressInput').value = prefill.address || cust.address || '';
-  }
-
-  document.getElementById('authStepPhone').style.display = 'block';
-  document.getElementById('authStepOtp').style.display = 'none';
-  document.getElementById('customerAuthModal').style.display = 'flex';
-}
-
-function closeAuthModal() {
-  document.getElementById('customerAuthModal').style.display = 'none';
-  clearInterval(otpCountdownTimer);
-}
-
-function backToPhoneStep() {
-  document.getElementById('authStepOtp').style.display = 'none';
-  document.getElementById('authStepPhone').style.display = 'block';
-  clearInterval(otpCountdownTimer);
-}
-
-async function handleSendOtp(event) {
-  if (event) event.preventDefault();
-  const name = document.getElementById('authNameInput').value.trim();
-  const rawPhone = document.getElementById('authPhoneInput').value.trim();
-  const district = document.getElementById('authDistrictInput').value;
-  const address = document.getElementById('authAddressInput').value.trim();
-
-  const phone = cleanIraqiPhone(rawPhone);
-  if (!name) {
-    showShopToast('يرجى إدخال اسمك الكريم', 'error');
-    return;
-  }
-  if (!isValidIraqiPhone(phone)) {
-    showShopToast('يرجى إدخال رقم هاتف عراقي صحيح مكون من 11 رقماً (مثل: 07830860919)', 'error');
-    return;
-  }
-  if (!address) {
-    showShopToast('يرجى إدخال عنوانك التفصيلي في ذي قار', 'error');
-    return;
-  }
-
-  // Generate 6-digit secure OTP code
-  currentOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  pendingAuthData = { name, phone, district, address };
-
-  // 1. Switch to OTP screen IMMEDIATELY - Zero waiting / zero delay!
-  document.getElementById('authStepPhone').style.display = 'none';
-  document.getElementById('authStepOtp').style.display = 'block';
-  document.getElementById('otpTargetPhoneDisplay').textContent = phone;
-  
-  // 2. Display Big Readable Code on Screen
-  const bigCodeEl = document.getElementById('otpDisplayBigCode');
-  if (bigCodeEl) {
-    bigCodeEl.textContent = currentOtpCode;
-  }
-
-  // 3. Configure WhatsApp Links (Customer & Store)
-  const phoneIntl = getIraqiPhoneInternational(phone);
-  const waCustomerLink = document.getElementById('btnWhatsAppCustomerSelf');
-  if (waCustomerLink) {
-    const custMsg = encodeURIComponent(`🔐 رمز التحقق الخاص بك لتأكيد حسابك في متجر سيجما ستور هو: [ ${currentOtpCode} ]\nرقم الهاتف المسجل: ${phone}\nالمحافظة: ذي قار (${district})`);
-    waCustomerLink.href = `https://wa.me/${phoneIntl}?text=${custMsg}`;
-  }
-
-  const waStoreLink = document.getElementById('btnWhatsAppStoreContact');
-  if (waStoreLink) {
-    const storeMsg = encodeURIComponent(`مرحباً متجر سيجما ستور، أطلب تفعيل حسابي:\n👤 الاسم: ${name}\n📱 رقم الهاتف: ${phone}\n📍 العنوان: ذي قار - ${district} (${address})\n🔑 كود التحقق: ${currentOtpCode}`);
-    waStoreLink.href = `https://wa.me/9647830860919?text=${storeMsg}`;
-  }
-
-  showShopToast(`رمز التحقق السريع هو: ${currentOtpCode}`, 'success');
-  startOtpCountdown();
-  setupOtpInputs();
-
-  // 4. Background Non-Blocking Notification to Telegram & Local Server
-  (async () => {
-    try {
-      const otpMsg = `🔐 *طلب رمز تحقق هاتف جديد (OTP)*
-━━━━━━━━━━━━━━━━━━
-👤 *الاسم:* ${name}
-📱 *رقم الهاتف:* \`${phone}\` (${detectCarrier(phone)})
-📍 *الموقع:* ذي قار - ${district} (${address})
-🔑 *رمز التحقق (OTP):* \`${currentOtpCode}\`
-⏰ *صلاحية الرمز:* 5 دقائق
-━━━━━━━━━━━━━━━━━━
-💬 [إرسال الكود للزبون بالواتساب مباشرة](https://wa.me/${phoneIntl}?text=${encodeURIComponent(`مرحباً أخي ${name}، رمز التحقق الخاص بك في متجر سيجما ستور هو: ${currentOtpCode}`)})`;
-
-      for (const cid of TG_CONFIG.chatIds) {
-        await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: cid,
-            text: otpMsg,
-            parse_mode: 'Markdown'
-          })
-        });
-      }
-    } catch (err) {
-      console.warn('Telegram OTP dispatch note:', err);
-    }
-
-    try {
-      await fetch('/api/customer/request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, name, otp: currentOtpCode, district, address })
-      });
-    } catch (_) {}
-  })();
-}
-
-// Convert Iraqi phone (e.g. 07830860919) to international (9647830860919) for WhatsApp
+// Convert an Iraqi number (07830860919) to international form (9647830860919)
 function getIraqiPhoneInternational(phone) {
   let clean = (phone || '').replace(/\D/g, '');
   if (clean.startsWith('0')) clean = '964' + clean.substring(1);
@@ -1174,437 +1095,19 @@ function getIraqiPhoneInternational(phone) {
   return clean;
 }
 
-// One-click WhatsApp code sender from Step 1
-function handleSendOtpWithWhatsApp() {
-  const name = document.getElementById('authCustomerName').value.trim();
-  const phone = document.getElementById('authCustomerPhone').value.trim();
-  if (!name) {
-    showShopToast('يرجى إدخال اسمك أولاً', 'error');
-    return;
-  }
-  if (!isValidIraqiPhone(phone)) {
-    showShopToast('يرجى إدخال رقم هاتف عراقي صحيح', 'error');
-    return;
-  }
-  handleSendOtp();
-  const phoneIntl = getIraqiPhoneInternational(phone);
-  const waUrl = `https://wa.me/${phoneIntl}?text=${encodeURIComponent(`🔐 رمز التحقق الخاص بك في متجر سيجما ستور هو: [ ${currentOtpCode} ]`)}`;
-  window.open(waUrl, '_blank');
-}
-
-// Auto fill OTP digits and trigger immediate verification
-function autoFillAndVerifyOtp() {
-  if (!currentOtpCode) return;
-  const digits = document.querySelectorAll('.otp-digit');
-  for (let i = 0; i < digits.length && i < currentOtpCode.length; i++) {
-    digits[i].value = currentOtpCode[i];
-  }
-  checkOtpComplete();
-  const fakeEvent = new Event('submit', { cancelable: true });
-  handleVerifyOtp(fakeEvent);
-}
-
-function startOtpCountdown() {
-  clearInterval(otpCountdownTimer);
-  otpCountdownSeconds = 60;
-  const countEl = document.getElementById('otpCountdown');
-  const resendBtn = document.getElementById('btnResendOtp');
-  const timerText = document.getElementById('otpTimerText');
-  if (resendBtn) resendBtn.disabled = true;
-  if (timerText) timerText.style.display = 'inline';
-
-  otpCountdownTimer = setInterval(() => {
-    otpCountdownSeconds--;
-    if (countEl) countEl.textContent = otpCountdownSeconds;
-    if (otpCountdownSeconds <= 0) {
-      clearInterval(otpCountdownTimer);
-      if (resendBtn) resendBtn.disabled = false;
-      if (timerText) timerText.style.display = 'none';
-    }
-  }, 1000);
-}
-
-function resendOtpCode() {
-  if (pendingAuthData) {
-    currentOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const bigCodeEl = document.getElementById('otpDisplayBigCode');
-    if (bigCodeEl) {
-      bigCodeEl.textContent = currentOtpCode;
-    }
-
-    const phoneIntl = getIraqiPhoneInternational(pendingAuthData.phone);
-    const waCustomerLink = document.getElementById('btnWhatsAppCustomerSelf');
-    if (waCustomerLink) {
-      const custMsg = encodeURIComponent(`🔐 رمز التحقق الجديد لتأكيد حسابك في متجر سيجما ستور هو: [ ${currentOtpCode} ]`);
-      waCustomerLink.href = `https://wa.me/${phoneIntl}?text=${custMsg}`;
-    }
-
-    const waStoreLink = document.getElementById('btnWhatsAppStoreContact');
-    if (waStoreLink) {
-      const storeMsg = encodeURIComponent(`مرحباً متجر سيجما ستور، أطلب تفعيل حسابي بكود جديد:\n👤 ${pendingAuthData.name} (${pendingAuthData.phone})\n🔑 رمز التحقق: ${currentOtpCode}`);
-      waStoreLink.href = `https://wa.me/9647830860919?text=${storeMsg}`;
-    }
-
-    showShopToast(`تم تجديد رمز التحقق: ${currentOtpCode}`, 'success');
-    startOtpCountdown();
-    setupOtpInputs();
-  }
-}
-
-function setupOtpInputs() {
-  const digits = document.querySelectorAll('.otp-digit');
-  digits.forEach((el, index) => {
-    el.value = '';
-    el.oninput = (e) => {
-      const val = e.target.value.replace(/\D/g, '');
-      e.target.value = val ? val[0] : '';
-      if (val && index < digits.length - 1) {
-        digits[index + 1].focus();
-      }
-      checkOtpComplete();
-    };
-    el.onkeydown = (e) => {
-      if (e.key === 'Backspace' && !e.target.value && index > 0) {
-        digits[index - 1].focus();
-      }
-    };
-    el.onpaste = (e) => {
-      e.preventDefault();
-      const pasteData = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
-      if (pasteData.length >= 6) {
-        digits.forEach((d, i) => d.value = pasteData[i] || '');
-        digits[digits.length - 1].focus();
-        checkOtpComplete();
-      }
-    };
-  });
-  if (digits[0]) digits[0].focus();
-}
-
-function getEnteredOtp() {
-  const digits = document.querySelectorAll('.otp-digit');
-  let code = '';
-  digits.forEach(d => code += (d.value || ''));
-  return code.trim();
-}
-
-function checkOtpComplete() {
-  const code = getEnteredOtp();
-  const btn = document.getElementById('btnVerifyOtp');
-  if (btn) btn.disabled = code.length < 6;
-}
-
-async function handleVerifyOtp(event) {
-  if (event) event.preventDefault();
-  const entered = getEnteredOtp();
-  if (entered.length < 6) {
-    showShopToast('يرجى إدخال رمز التحقق المكون من 6 أرقام', 'error');
-    return;
-  }
-
-  if (entered !== currentOtpCode && entered !== '123456') {
-    showShopToast('رمز التحقق غير صحيح، يرجى إعادة المحاولة', 'error');
-    return;
-  }
-
-  // Verification succeeded!
-  const customer = {
-    ...pendingAuthData,
-    province: 'ذي قار',
-    is_verified: true,
-    verified_at: new Date().toISOString()
-  };
-
-  saveCustomerSession(customer);
-  updateHeaderAccountUI();
-
-  // Try backend customer registration if available
+// Used by the checkout modal to pre-fill a returning shopper's details
+function getCustomerSession() {
   try {
-    await fetch('/api/customer/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(customer)
-    });
-  } catch(_) {}
+    const raw = localStorage.getItem('sigmastore_customer_session');
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
 
-  // Send Telegram confirmation to store owner
+function saveCustomerSession(cust) {
   try {
-    const verifiedMsg = `✅ *تم توثيق وتأكيد حساب زبون جديد!*
-━━━━━━━━━━━━━━━━━━
-👤 *الاسم:* ${customer.name}
-📱 *الهاتف:* \`${customer.phone}\` (موثق ومؤكد ✓)
-📍 *الموقع:* ذي قار - ${customer.district} (${customer.address})
-⏰ *وقت التأكيد:* ${new Date().toLocaleString('ar-IQ')}
-━━━━━━━━━━━━━━━━━━`;
-
-    for (const cid of TG_CONFIG.chatIds) {
-      await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: cid,
-          text: verifiedMsg,
-          parse_mode: 'Markdown'
-        })
-      });
-    }
-  } catch(_) {}
-
-  closeAuthModal();
-  showShopToast(`أهلاً بك يا ${customer.name.split(' ')[0]}! تم تأكيد رقم هاتفك وتفعيل حسابك بنجاح.`, 'success');
-
-  // If checkout was pending, re-open checkout modal pre-filled
-  if (shopState.cart.length > 0) {
-    openCheckoutModal();
-  }
-}
-
-// Account Portal (Order History, Cancellation, Profile Edit)
-function openPortalModal() {
-  const cust = getCustomerSession();
-  if (!cust) {
-    openAuthModal();
-    return;
-  }
-
-  document.getElementById('portalUserName').textContent = cust.name || 'الزبون الكرام';
-  document.getElementById('portalUserPhone').textContent = cust.phone || '';
-  document.getElementById('portalUserLocation').innerHTML = `<i class="fa-solid fa-location-dot"></i> ذي قار - ${cust.district || 'الناصرية'}`;
-
-  // Populate profile edit form
-  document.getElementById('profileEditName').value = cust.name || '';
-  document.getElementById('profileEditPhone').value = cust.phone || '';
-  if (document.getElementById('profileEditDistrict') && cust.district) {
-    document.getElementById('profileEditDistrict').value = cust.district;
-  }
-  document.getElementById('profileEditAddress').value = cust.address || '';
-  document.getElementById('profileEditAltPhone').value = cust.altPhone || '';
-
-  renderCustomerOrders();
-  switchPortalTab('portalOrders');
-  document.getElementById('customerPortalModal').style.display = 'flex';
-}
-
-function closePortalModal() {
-  document.getElementById('customerPortalModal').style.display = 'none';
-}
-
-function switchPortalTab(tabId) {
-  const tabBtns = document.querySelectorAll('.portal-tab-btn');
-  tabBtns.forEach(b => b.classList.toggle('active', b.getAttribute('data-tab') === tabId));
-
-  const paneOrders = document.getElementById('portalTabOrders');
-  const paneProfile = document.getElementById('portalTabProfile');
-  if (tabId === 'portalOrders') {
-    paneOrders.style.display = 'block';
-    paneProfile.style.display = 'none';
-  } else {
-    paneOrders.style.display = 'none';
-    paneProfile.style.display = 'block';
-  }
-}
-
-function getCustomerOrders() {
-  const cust = getCustomerSession();
-  if (!cust || !cust.phone) return [];
-  try {
-    const raw = localStorage.getItem(`sigmastore_orders_${cust.phone}`) || localStorage.getItem('sigmastore_customer_orders');
-    return raw ? JSON.parse(raw) : [];
-  } catch(e) {
-    return [];
-  }
-}
-
-function saveCustomerOrderToDB(order) {
-  const cust = getCustomerSession();
-  const phone = (cust && cust.phone) ? cust.phone : order.customer_phone;
-  const orders = getCustomerOrders();
-  orders.unshift(order);
-  saveAllCustomerOrders(orders, phone);
-}
-
-function saveAllCustomerOrders(orders, phone = null) {
-  const cust = getCustomerSession();
-  const p = phone || (cust ? cust.phone : '');
-  try {
-    if (p) localStorage.setItem(`sigmastore_orders_${p}`, JSON.stringify(orders));
-    localStorage.setItem('sigmastore_customer_orders', JSON.stringify(orders));
-  } catch(e) {}
-}
-
-function renderCustomerOrders() {
-  const container = document.getElementById('portalOrdersContainer');
-  const countEl = document.getElementById('portalOrdersCount');
-  if (!container) return;
-
-  const orders = getCustomerOrders();
-  if (countEl) countEl.textContent = orders.length;
-
-  if (orders.length === 0) {
-    container.innerHTML = `
-      <div class="text-center text-muted p-5">
-        <i class="fa-solid fa-box-open fa-3x mb-3" style="opacity:0.4;"></i>
-        <h4>لا توجد طلبات سابقة حتى الآن</h4>
-        <p class="font-sm mt-1">تصفح أقسام المتجر واختر منتجاتك لإرسال أول طلب شحن داخل محافظة ذي قار.</p>
-        <button class="btn-primary-auth mt-3" onclick="closePortalModal(); window.scrollTo({top:0, behavior:'smooth'});">
-          <i class="fa-solid fa-cart-shopping"></i> ابدأ التسوق الآن
-        </button>
-      </div>
-    `;
-    return;
-  }
-
-  const statusMap = {
-    'pending': { text: '🟡 قيد المراجعة والانتظار', cls: 'status-pending' },
-    'confirmed': { text: '🔵 تم تأكيد الطلب', cls: 'status-confirmed' },
-    'shipping': { text: '🚚 قيد الشحن والتوصيل', cls: 'status-shipping' },
-    'completed': { text: '🟢 تم التسليم بنجاح', cls: 'status-completed' },
-    'cancelled': { text: '🔴 تم إلغاء الطلب', cls: 'status-cancelled' }
-  };
-
-  container.innerHTML = orders.map(ord => {
-    const st = statusMap[ord.status] || { text: ord.status, cls: 'status-pending' };
-    const canCancel = ord.status === 'pending';
-
-    const itemsSummary = (ord.items || []).map(it => `
-      <div class="order-item-mini">
-        <span>▫️ ${it.model ? `[${it.model}] ` : ''}${it.name} (${it.qty}x)</span>
-        <strong>${formatIQD(it.price * it.qty)}</strong>
-      </div>
-    `).join('');
-
-    return `
-      <div class="order-history-card">
-        <div class="order-card-header">
-          <span class="order-ref-title">#${ord.orderNumber}</span>
-          <span class="order-status-badge ${st.cls}">${st.text}</span>
-        </div>
-
-        <div class="order-items-summary">
-          ${itemsSummary}
-        </div>
-
-        <div class="text-muted font-sm mb-2">
-          <i class="fa-solid fa-location-dot text-cyan"></i> ذي قار - ${ord.district || 'الناصرية'} (${ord.address})
-          <span class="mr-2">• ${new Date(ord.created_at).toLocaleDateString('ar-IQ')}</span>
-        </div>
-
-        <div class="order-card-footer">
-          <div class="order-total-amount">
-            الإجمالي: ${formatIQD(ord.totalAmount)}
-          </div>
-          <div>
-            ${canCancel ? `
-              <button class="btn-cancel-order" onclick="cancelCustomerOrder('${ord.orderNumber}')">
-                <i class="fa-solid fa-ban"></i> إلغاء الطلب
-              </button>
-            ` : (ord.status === 'cancelled' ? `
-              <span class="text-muted font-sm"><i class="fa-solid fa-ban"></i> ملغي</span>
-            ` : `
-              <span class="text-muted font-sm"><i class="fa-solid fa-truck-fast"></i> الطلب قيد التجهيز</span>
-            `)}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-async function cancelCustomerOrder(orderNumber) {
-  if (!confirm(`هل أنت متأكد من رغبتك في إلغاء طلب الشراء رقم #${orderNumber}؟`)) return;
-
-  const orders = getCustomerOrders();
-  const order = orders.find(o => o.orderNumber === orderNumber);
-  if (!order) return;
-
-  order.status = 'cancelled';
-  order.cancelled_at = new Date().toISOString();
-  saveAllCustomerOrders(orders);
-
-  // Send Telegram cancellation alert to store owner
-  try {
-    const cancelMsg = `⚠️ *إشعار إلغاء طلب من قبل الزبون!*
-━━━━━━━━━━━━━━━━━━
-🔢 *رقم الطلب:* #${orderNumber}
-👤 *اسم الزبون:* ${order.customer_name}
-📞 *رقم الهاتف:* \`${order.customer_phone}\` (موثق ✓)
-📍 *الموقع:* ذي قار - ${order.district || order.city || 'الناصرية'}
-💰 *القيمة:* *${formatIQD(order.totalAmount)}*
-⏰ *وقت الإلغاء:* ${new Date().toLocaleString('ar-IQ')}
-━━━━━━━━━━━━━━━━━━`;
-
-    for (const cid of TG_CONFIG.chatIds) {
-      await fetch(`https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: cid,
-          text: cancelMsg,
-          parse_mode: 'Markdown'
-        })
-      });
-    }
-  } catch(e) {
-    console.warn('Telegram cancellation notify error:', e);
-  }
-
-  // Try local server endpoint if available
-  try {
-    await fetch('/api/customer/cancel-order', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderNumber, phone: order.customer_phone })
-    });
-  } catch(e) {}
-
-  showShopToast(`تم إلغاء الطلب #${orderNumber} بنجاح`, 'success');
-  renderCustomerOrders();
-}
-
-function saveCustomerProfile(event) {
-  if (event) event.preventDefault();
-  const cust = getCustomerSession();
-  if (!cust) return;
-
-  const name = document.getElementById('profileEditName').value.trim();
-  const district = document.getElementById('profileEditDistrict').value;
-  const address = document.getElementById('profileEditAddress').value.trim();
-  const altPhone = document.getElementById('profileEditAltPhone').value.trim();
-
-  if (!name || !address) {
-    showShopToast('يرجى ملء الاسم والعنوان التفصيلي', 'error');
-    return;
-  }
-
-  cust.name = name;
-  cust.district = district;
-  cust.address = address;
-  cust.altPhone = altPhone;
-  cust.updated_at = new Date().toISOString();
-
-  saveCustomerSession(cust);
-  updateHeaderAccountUI();
-
-  // Try syncing with backend
-  try {
-    fetch('/api/customer/profile', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cust)
-    });
-  } catch(e) {}
-
-  document.getElementById('portalUserName').textContent = cust.name;
-  document.getElementById('portalUserLocation').innerHTML = `<i class="fa-solid fa-location-dot"></i> ذي قار - ${cust.district}`;
-
-  showShopToast('تم حفظ وتحديث بياناتك الشخصية بنجاح!', 'success');
-}
-
-function logoutCustomer() {
-  if (confirm('هل ترغب بتسجيل الخروج من حسابك؟')) {
-    clearCustomerSession();
-    updateHeaderAccountUI();
-    closePortalModal();
-    showShopToast('تم تسجيل الخروج بنجاح', 'info');
-  }
+    localStorage.setItem('sigmastore_customer_session', JSON.stringify(cust));
+  } catch (e) {}
 }

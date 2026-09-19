@@ -28,7 +28,7 @@
     "sharp": "^0.35.4"
   },
   "devDependencies": {
-    "electron": "^33.2.1",
+    "electron": "^38.8.6",
     "electron-packager": "^17.1.2"
   }
 }

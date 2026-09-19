@@ -55,7 +55,10 @@ if (!gotTheLock) {
       }
     });
 
-    tryLoadURL(mainWindow, 'http://localhost:4000');
+    // Must match the port server/app.js actually listened on, otherwise the
+    // window tries to load a port nothing is serving.
+    const port = process.env.PORT || 4000;
+    tryLoadURL(mainWindow, `http://localhost:${port}`);
 
     mainWindow.once('ready-to-show', () => {
       mainWindow.show();

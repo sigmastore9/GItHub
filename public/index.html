@@ -22,14 +22,11 @@
       <!-- Logo & Store Branding -->
       <div class="sidebar-brand">
         <div class="brand-logo-wrap">
-          <img src="/images/logo.png" alt="Sigma Store Logo" class="sidebar-logo-img" onclick="toggleSidebar()" title="تصغير / توسيع القائمة الجانبية">
+          <img src="/images/logo.png" alt="Sigma Store Logo" class="sidebar-logo-img">
           <div class="brand-text-block">
             <h1 class="sidebar-store-title" id="headerStoreName">Sigma Store</h1>
             <span class="sidebar-store-subtitle">صيانة • اكسسوارات • الكترونيات</span>
           </div>
-          <button id="sidebarToggleBtn" class="sidebar-toggle-btn" onclick="toggleSidebar()" title="تصغير / توسيع القائمة الجانبية">
-            <i class="fa-solid fa-angles-right" id="sidebarToggleIcon"></i>
-          </button>
         </div>
       </div>
 
@@ -111,12 +108,6 @@
       
       <!-- Top Header (KPIs + Actions) -->
       <header class="top-header">
-        <div class="header-right-tools">
-          <button class="header-toggle-sidebar-btn" onclick="toggleSidebar()" title="تصغير / توسيع القائمة الجانبية">
-            <i class="fa-solid fa-bars"></i>
-          </button>
-        </div>
-
         <!-- Quick KPI Badges in Header -->
         <div class="header-kpis">
           <div class="kpi-chip kpi-profit" title="إجمالي الأرباح الكلية (مبيعات + هاردوير + سوفت وير)">
@@ -200,14 +191,14 @@
 
           <!-- Category Filter Chips Bar -->
           <div class="category-chips">
-            <button class="chip active" onclick="filterCategory('all', this)">الكل (<span id="catCountAll">0</span>)</button>
-            <button class="chip" onclick="filterCategory('سماعات', this)"><i class="fa-solid fa-headphones"></i> سماعات</button>
-            <button class="chip" onclick="filterCategory('كابلات', this)"><i class="fa-solid fa-cable-car"></i> كابلات</button>
-            <button class="chip" onclick="filterCategory('شواحن', this)"><i class="fa-solid fa-bolt"></i> شواحن</button>
-            <button class="chip" onclick="filterCategory('محولات وتوصيلات', this)"><i class="fa-solid fa-network-wired"></i> محولات وتوصيلات</button>
-            <button class="chip" onclick="filterCategory('تخزين وفلاشات', this)"><i class="fa-solid fa-hard-drive"></i> تخزين وفلاشات</button>
-            <button class="chip" onclick="filterCategory('حماية ولواصق شاشة', this)"><i class="fa-solid fa-mobile-screen"></i> حماية ولواصق</button>
-            <button class="chip" onclick="filterCategory('أخرى', this)">أخرى</button>
+            <button class="chip active" data-category="all" onclick="filterCategory('all', this)">الكل <span class="chip-count" id="catCountAll">0</span></button>
+            <button class="chip" data-category="سماعات" onclick="filterCategory('سماعات', this)"><i class="fa-solid fa-headphones"></i> سماعات <span class="chip-count">0</span></button>
+            <button class="chip" data-category="كابلات" onclick="filterCategory('كابلات', this)"><i class="fa-solid fa-cable-car"></i> كابلات <span class="chip-count">0</span></button>
+            <button class="chip" data-category="شواحن" onclick="filterCategory('شواحن', this)"><i class="fa-solid fa-bolt"></i> شواحن <span class="chip-count">0</span></button>
+            <button class="chip" data-category="محولات وتوصيلات" onclick="filterCategory('محولات وتوصيلات', this)"><i class="fa-solid fa-network-wired"></i> محولات وتوصيلات <span class="chip-count">0</span></button>
+            <button class="chip" data-category="تخزين وفلاشات" onclick="filterCategory('تخزين وفلاشات', this)"><i class="fa-solid fa-hard-drive"></i> تخزين وفلاشات <span class="chip-count">0</span></button>
+            <button class="chip" data-category="حماية ولواصق شاشة" onclick="filterCategory('حماية ولواصق شاشة', this)"><i class="fa-solid fa-mobile-screen"></i> حماية ولواصق <span class="chip-count">0</span></button>
+            <button class="chip" data-category="أخرى" onclick="filterCategory('أخرى', this)">أخرى <span class="chip-count">0</span></button>
           </div>
         </div>
 
@@ -341,6 +332,20 @@
               <div class="summary-row total-row">
                 <span>المبلغ المطلوب من الزبون:</span>
                 <span id="cartTotalSelling" class="total-price">0 د.ع</span>
+              </div>
+
+              <!-- Cash handling: what the customer handed over, and the change owed back -->
+              <div id="cartCashBox" class="cash-box">
+                <div class="summary-row align-center">
+                  <span>المبلغ المستلم من الزبون:</span>
+                  <input type="number" id="cartAmountReceived" value="" min="0" step="250"
+                         placeholder="0" class="form-input form-input-sm text-left"
+                         style="width: 120px;" oninput="renderPosCartSummary()">
+                </div>
+                <div class="summary-row change-row">
+                  <span>الباقي للزبون:</span>
+                  <span id="cartChangeDue" class="change-amount">0 د.ع</span>
+                </div>
               </div>
 
               <!-- Customer Details Inputs -->
@@ -821,27 +826,118 @@
         <div class="settings-card">
           <h2><i class="fa-solid fa-sliders"></i> إعدادات النظام والمتجر</h2>
           
-          <div class="form-group mt-3">
-            <label>اسم المحل / المتجر:</label>
-            <input type="text" id="settingStoreName" class="form-input" placeholder="MY Store">
+          <div class="settings-grid">
+            <div class="form-group">
+              <label>اسم المحل / المتجر:</label>
+              <input type="text" id="settingStoreName" class="form-input" placeholder="Sigma Store">
+            </div>
+
+            <div class="form-group">
+              <label>رقم الهاتف (يظهر للزبائن في المتجر الإلكتروني):</label>
+              <input type="text" id="settingPhone" class="form-input" placeholder="07830860919 - 07835046817">
+            </div>
+
+            <div class="form-group">
+              <label>خدمات المحل (تظهر في ترويسة المتجر):</label>
+              <input type="text" id="settingServices" class="form-input" placeholder="صيانة هواتف | اكسسوارات | استنساخ">
+            </div>
+
+            <div class="form-group">
+              <label>حد تنبيه انخفاض المخزون (أقل من كم قطعة):</label>
+              <input type="number" id="settingLowStock" class="form-input" placeholder="2" min="0">
+            </div>
+
+            <div class="form-group">
+              <label>سعر صرف الدولار (دينار لكل 1$):</label>
+              <input type="number" id="settingUsdRate" class="form-input" placeholder="1500" min="0">
+            </div>
+
+            <div class="form-group">
+              <label>نسبة الربح الافتراضية للبيع المفرد (%):</label>
+              <input type="number" id="settingRetailMargin" class="form-input" placeholder="25" min="0">
+            </div>
           </div>
 
-          <div class="form-group">
-            <label>حد تنبيه انخفاض المخزون (أقل من كم قطعة):</label>
-            <input type="number" id="settingLowStock" class="form-input" placeholder="2">
-          </div>
-
-          <button class="btn btn-primary" onclick="saveSettings()">
+          <button class="btn btn-primary mt-2" onclick="saveSettings()">
             <i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات
           </button>
 
           <hr class="my-4">
 
+          <!-- TELEGRAM NOTIFICATIONS -->
+          <h3><i class="fa-brands fa-telegram"></i> إشعارات تيليجرام</h3>
+          <p class="text-muted">
+            يرسل الخادم إشعاراً فورياً عند وصول طلب جديد من المتجر أو إضافة منتج.
+            <strong class="text-warning">لا تُرسل الإشعارات إلا بعد ضبط الحقلين.</strong>
+          </p>
+
+          <div class="settings-grid">
+            <div class="form-group">
+              <label>
+                توكن البوت (Bot Token):
+                <span id="tgTokenStatus" class="badge badge-warning">غير مُعيّن</span>
+              </label>
+              <input type="password" id="settingTgToken" class="form-input" autocomplete="new-password"
+                     placeholder="اتركه فارغاً للإبقاء على التوكن الحالي">
+              <small class="text-muted">لأسباب أمنية لا يُعرض التوكن المحفوظ. اكتب توكناً جديداً لتبديله فقط.</small>
+            </div>
+
+            <div class="form-group">
+              <label>معرّفات المحادثات (Chat IDs) مفصولة بفاصلة:</label>
+              <input type="text" id="settingTgChatIds" class="form-input" placeholder="1390419753, 987654321">
+            </div>
+          </div>
+
+          <button class="btn btn-outline mt-2" onclick="saveTelegramSettings()">
+            <i class="fa-solid fa-paper-plane"></i> حفظ إعدادات الإشعارات
+          </button>
+
+          <hr class="my-4">
+
+          <!-- ADMIN PASSWORD -->
+          <h3><i class="fa-solid fa-key"></i> كلمة مرور لوحة الإدارة</h3>
+          <p class="text-muted">
+            الدخول من هذا الجهاز لا يطلب كلمة مرور. تُطلب فقط عند فتح اللوحة من الإنترنت أو من جهاز آخر على الشبكة.
+          </p>
+
+          <div class="settings-grid">
+            <div class="form-group">
+              <label>كلمة المرور الجديدة (6 أحرف على الأقل):</label>
+              <input type="password" id="settingNewPassword" class="form-input" autocomplete="new-password" placeholder="••••••••">
+            </div>
+            <div class="form-group">
+              <label>تأكيد كلمة المرور:</label>
+              <input type="password" id="settingConfirmPassword" class="form-input" autocomplete="new-password" placeholder="••••••••">
+            </div>
+          </div>
+
+          <button class="btn btn-outline mt-2" onclick="changeAdminPassword()">
+            <i class="fa-solid fa-shield-halved"></i> تغيير كلمة المرور
+          </button>
+
+          <hr class="my-4">
+
+          <!-- BACKUPS -->
           <h3><i class="fa-solid fa-database"></i> النسخ الاحتياطي والأمان</h3>
-          <p class="text-muted">قم بتنزيل نسخة احتياطية من قاعدة البيانات والمنتجات والصيانة لحفظها على فلاش أو قرص خارجي.</p>
-          <a href="/api/backup" class="btn btn-outline" download>
-            <i class="fa-solid fa-download"></i> تنزيل نسخة احتياطية من قاعدة البيانات (Backup Database)
-          </a>
+          <p class="text-muted">
+            يأخذ النظام نسخة تلقائية بعد كل عملية، ويحتفظ بآخر 60 نسخة في ثلاثة مواقع مختلفة.
+          </p>
+
+          <div class="d-flex gap-2 flex-wrap mb-3">
+            <button class="btn btn-primary" onclick="triggerManualBackup()">
+              <i class="fa-solid fa-shield-halved"></i> أخذ نسخة احتياطية الآن
+            </button>
+            <a href="/api/backup" class="btn btn-outline" download>
+              <i class="fa-solid fa-download"></i> تنزيل قاعدة البيانات
+            </a>
+            <button class="btn btn-outline" onclick="loadSecureBackups()">
+              <i class="fa-solid fa-rotate"></i> تحديث قائمة النسخ
+            </button>
+          </div>
+
+          <div id="secureBackupsBox" class="backups-box">
+            <div class="text-muted p-2">اضغط «تحديث قائمة النسخ» لعرض النسخ المحفوظة.</div>
+          </div>
         </div>
       </section>
 
@@ -1148,6 +1244,12 @@
             <div class="form-group">
               <label>رمز القفل (Passcode):</label>
               <input type="text" id="repFormPasscode" class="form-input" placeholder="رمز القفل إن وجد">
+              <small class="text-muted">لا يُطبع على وصل الزبون لأسباب أمنية.</small>
+            </div>
+            <div class="form-group">
+              <label>موعد التسليم المتوقع:</label>
+              <input type="date" id="repFormPromisedAt" class="form-input">
+              <small class="text-muted">يظهر على الوصل ليعرف الزبون متى يراجع.</small>
             </div>
           </div>
 

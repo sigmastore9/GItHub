@@ -200,25 +200,30 @@ function initDatabase() {
   try {
     db.exec(`ALTER TABLE orders ADD COLUMN cancelled_by TEXT;`);
   } catch(e) {}
+  // Date promised to the customer, so "متى يجهز؟" has an answer on the ticket
+  try {
+    db.exec(`ALTER TABLE repairs ADD COLUMN promised_at TEXT;`);
+  } catch(e) {}
 
-  // Default settings for Sigma Store
+  // Seed default settings ONLY when absent. These used to be forced on every
+  // startup, so anything saved from the settings screen (store name, phone)
+  // was silently reverted the next time the app launched.
   const checkSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
-  const currentStoreName = checkSetting.get('store_name');
-  if (!currentStoreName) {
-    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('store_name', 'Sigma Store');
-  } else {
-    db.prepare('UPDATE settings SET value = ? WHERE key = ?').run('Sigma Store', 'store_name');
-  }
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('phone', '07830860919 - 07835046817');
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('store_services', 'صيانة هواتف | اكسسوارات | استنساخ | الكترونيات');
-  if (!checkSetting.get('usd_rate')) {
-    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('usd_rate', '1500');
-  }
-  if (!checkSetting.get('default_retail_margin')) {
-    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('default_retail_margin', '25');
-  }
-  if (!checkSetting.get('low_stock_threshold')) {
-    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('low_stock_threshold', '2');
+  const insertSetting = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)');
+
+  const DEFAULT_SETTINGS = {
+    store_name: 'Sigma Store',
+    phone: '07830860919 - 07835046817',
+    store_services: 'صيانة هواتف | اكسسوارات | استنساخ | الكترونيات',
+    usd_rate: '1500',
+    default_retail_margin: '25',
+    low_stock_threshold: '2'
+  };
+
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+    if (!checkSetting.get(key)) {
+      insertSetting.run(key, value);
+    }
   }
 
   console.log('Sigma Store database initialized and migrated successfully.');
@@ -244,46 +249,63 @@ try {
 
 let backupDebounceTimer = null;
 
+// Keep the most recent N snapshots per location. Backups ran on every single
+// write with no cleanup, so the folders grew without bound.
+const MAX_BACKUPS_PER_DIR = 60;
+
+function pruneOldBackups(dir) {
+  try {
+    if (!fs.existsSync(dir)) return;
+    const files = fs.readdirSync(dir)
+      .filter(f => /^store_data_backup_.*\.db$/.test(f))
+      .map(f => ({ name: f, time: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time);
+
+    for (const old of files.slice(MAX_BACKUPS_PER_DIR)) {
+      try { fs.unlinkSync(path.join(dir, old.name)); } catch (_) {}
+    }
+  } catch (_) {}
+}
+
 /**
  * Automatically creates a secure timestamped snapshot of the database
  */
 function triggerAutoBackup(immediate = false) {
-  if (backupDebounceTimer && !immediate) {
+  if (backupDebounceTimer) {
     clearTimeout(backupDebounceTimer);
+    backupDebounceTimer = null;
   }
 
   const performBackup = () => {
     try {
       if (!fs.existsSync(dbPath)) return;
 
+      // In WAL mode the newest committed data may still live in store_data.db-wal.
+      // Copying the .db alone could silently produce a snapshot that is missing
+      // the most recent transactions. Fold the WAL into the main file first.
+      try {
+        db.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+      } catch (err) {
+        console.error('WAL checkpoint before backup failed:', err.message);
+      }
+
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');
       const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-      
+
       const fileName = `store_data_backup_${timestamp}.db`;
 
-      // 1. Save to primary C:\ location
-      try {
-        if (fs.existsSync(SECURE_BACKUP_DIR)) {
-          fs.copyFileSync(dbPath, path.join(SECURE_BACKUP_DIR, fileName));
-          fs.copyFileSync(dbPath, path.join(SECURE_BACKUP_DIR, 'latest_store_data.db'));
-        }
-      } catch (_) {}
-
-      // 2. Save to User Profile Documents/Home location
-      try {
-        if (fs.existsSync(USER_BACKUP_DIR)) {
-          fs.copyFileSync(dbPath, path.join(USER_BACKUP_DIR, fileName));
-          fs.copyFileSync(dbPath, path.join(USER_BACKUP_DIR, 'latest_store_data.db'));
-        }
-      } catch (_) {}
-
-      // 3. Save to local mirror
-      try {
-        if (fs.existsSync(LOCAL_BACKUP_DIR)) {
-          fs.copyFileSync(dbPath, path.join(LOCAL_BACKUP_DIR, fileName));
-        }
-      } catch (_) {}
+      for (const dir of [SECURE_BACKUP_DIR, USER_BACKUP_DIR, LOCAL_BACKUP_DIR]) {
+        try {
+          if (!fs.existsSync(dir)) continue;
+          fs.copyFileSync(dbPath, path.join(dir, fileName));
+          // The two off-project locations also keep a fixed "latest" copy
+          if (dir !== LOCAL_BACKUP_DIR) {
+            fs.copyFileSync(dbPath, path.join(dir, 'latest_store_data.db'));
+          }
+          pruneOldBackups(dir);
+        } catch (_) {}
+      }
 
       console.log(`🔒 [Secure Auto-Backup]: Snapshot saved safely -> ${fileName}`);
     } catch (err) {
@@ -294,7 +316,8 @@ function triggerAutoBackup(immediate = false) {
   if (immediate) {
     performBackup();
   } else {
-    backupDebounceTimer = setTimeout(performBackup, 300);
+    // Coalesces the request-level and transaction-level triggers into one run
+    backupDebounceTimer = setTimeout(performBackup, 1500);
   }
 }
 

@@ -5,13 +5,15 @@ const multer = require('multer');
 const { db, runTransaction, getSetting, setSetting, triggerAutoBackup, SECURE_BACKUP_DIR } = require('./db');
 const { parseSupplierInvoice } = require('./pdfParser');
 const { findModelData } = require('./scraper');
+const auth = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Middleware. 50mb allowed any anonymous caller to tie up memory; product
+// payloads are a few KB, and real uploads go through multer instead.
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Smart Online Redirect: Direct online web visitors straight to the customer shop
 app.get('/', (req, res, next) => {
@@ -22,7 +24,111 @@ app.get('/', (req, res, next) => {
   next();
 });
 
+// ==========================================
+// ADMIN LOGIN GATE
+// ==========================================
+const generatedAdminPassword = auth.initAdminPassword();
+
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body || {};
+  if (!auth.checkPassword(password)) {
+    // Slow the response down so the password cannot be brute forced quickly
+    return setTimeout(() => {
+      res.status(401).json({ success: false, message: 'كلمة المرور غير صحيحة' });
+    }, 600);
+  }
+  const secure = (req.headers['x-forwarded-proto'] || '').includes('https');
+  res.setHeader('Set-Cookie', auth.sessionCookieHeader(auth.issueSession(), secure));
+  res.json({ success: true, message: 'تم تسجيل الدخول بنجاح' });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', auth.clearCookieHeader());
+  res.json({ success: true, message: 'تم تسجيل الخروج' });
+});
+
+app.get('/api/auth/status', (req, res) => {
+  res.json({
+    success: true,
+    authenticated: auth.isAuthenticated(req),
+    local: auth.isLocalRequest(req)
+  });
+});
+
+app.post('/api/auth/change-password', auth.requireAdmin, (req, res) => {
+  try {
+    const { newPassword } = req.body || {};
+    auth.setPassword(newPassword);
+    res.setHeader('Set-Cookie', auth.sessionCookieHeader(auth.issueSession(), false));
+    res.json({ success: true, message: 'تم تغيير كلمة المرور بنجاح' });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// The admin dashboard itself. Remote visitors get the login screen instead of
+// the panel; the shop under /shop stays completely public.
+app.get(['/', '/index.html'], (req, res, next) => {
+  if (auth.isAuthenticated(req)) return next();
+  res.sendFile(path.join(__dirname, '..', 'public', 'login.html'));
+});
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// ==========================================
+// API ACCESS GATE
+// ==========================================
+// Everything under /api requires the admin session EXCEPT the routes the public
+// storefront genuinely needs. Adding a route to this list is a deliberate act.
+const PUBLIC_API_ROUTES = [
+  { method: 'GET', path: /^\/api\/sync\/(events|version)$/ },
+  { method: 'GET', path: /^\/api\/products$/ },
+  { method: 'GET', path: /^\/api\/products\/\d+$/ },
+  { method: 'GET', path: /^\/api\/settings$/ },
+  { method: 'POST', path: /^\/api\/shop\/orders$/ },
+  { method: 'GET', path: /^\/api\/shop\/track-repair\/.+$/ },
+  // Customer self-service; these enforce phone ownership individually
+  { method: 'POST', path: /^\/api\/customer\/(request-otp|register|login|cancel-order)$/ },
+  { method: 'GET', path: /^\/api\/customer\/orders$/ },
+  { method: 'PUT', path: /^\/api\/customer\/profile$/ }
+];
+
+function isPublicApiRoute(req) {
+  return PUBLIC_API_ROUTES.some(r => r.method === req.method && r.path.test(req.path));
+}
+
+// Fields a shopper may see. Cost and wholesale prices are the shop's margin and
+// must never leave the building; the admin panel gets the full row.
+const PUBLIC_PRODUCT_FIELDS = [
+  'id', 'name', 'model', 'category', 'brand',
+  'selling_price', 'stock_quantity', 'image_url', 'barcode', 'updated_at'
+];
+
+function publicProductView(product, req) {
+  if (auth.isAuthenticated(req)) return product;
+  const out = {};
+  for (const f of PUBLIC_PRODUCT_FIELDS) out[f] = product[f];
+  return out;
+}
+
+// Settings hold the Telegram bot token and the admin password hash.
+const PUBLIC_SETTING_KEYS = ['store_name', 'phone', 'store_services'];
+
+function publicSettingsView(settings, req) {
+  if (auth.isAuthenticated(req)) return settings;
+  const out = {};
+  for (const k of PUBLIC_SETTING_KEYS) {
+    if (settings[k] !== undefined) out[k] = settings[k];
+  }
+  return out;
+}
+
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  if (req.path.startsWith('/api/auth/')) return next();
+  if (isPublicApiRoute(req)) return next();
+  return auth.requireAdmin(req, res, next);
+});
 
 // ==========================================
 // REAL-TIME SYNC INFRASTRUCTURE (SSE & Live Broadcast)
@@ -87,6 +193,10 @@ app.get('/api/sync/version', (req, res) => {
 // GitHub One-Click Cloud Sync & Repository Resolution
 const { exec } = require('child_process');
 
+// Returns the git repo this copy of the app actually lives in, or null.
+// There used to be a hardcoded fallback to 'C:\progect\Sigma Store', which meant
+// ANY copy of the app running anywhere (a test run, a packaged build) would commit
+// and push to the real store repository. Never guess the repository.
 function getGitRepoRoot() {
   let current = __dirname;
   while (current && current !== path.parse(current).root) {
@@ -95,16 +205,13 @@ function getGitRepoRoot() {
     }
     current = path.dirname(current);
   }
-  const rootCandidate = 'C:\\progect\\Sigma Store';
-  if (fs.existsSync(path.join(rootCandidate, '.git'))) {
-    return rootCandidate;
-  }
-  return path.resolve(__dirname, '..');
+  return null;
 }
 
 function mirrorUploadsToGit() {
   try {
     const gitRoot = getGitRepoRoot();
+    if (!gitRoot) return;
     const currentUploads = path.join(__dirname, '..', 'public', 'uploads');
     const targetUploads = path.join(gitRoot, 'public', 'uploads');
     if (path.resolve(currentUploads) === path.resolve(targetUploads)) return;
@@ -126,6 +233,22 @@ function mirrorUploadsToGit() {
 }
 
 let gitSyncTimeout = null;
+// Single entry point for "the storefront must reflect this change".
+// It regenerates the static catalogue the published site reads, tells every open
+// shop window to refresh, and queues the push to GitHub. Anything that alters a
+// price, an image, stock or the store's public details should call this — not
+// just product edits, which is all that used to be wired up. Selling from the POS
+// or changing the shop phone left the published site showing stale figures.
+function syncStorefront(reason = 'DATA_CHANGED') {
+  try {
+    exportStaticProductsJson();
+    broadcastSync({ type: 'PRODUCT_UPDATED', reason });
+    triggerGitHubCloudSync();
+  } catch (err) {
+    console.error('Storefront sync failed:', err.message);
+  }
+}
+
 function triggerGitHubCloudSync(debounceMs = 3000) {
   if (gitSyncTimeout) clearTimeout(gitSyncTimeout);
   return new Promise((resolve) => {
@@ -133,6 +256,9 @@ function triggerGitHubCloudSync(debounceMs = 3000) {
       exportStaticProductsJson();
       mirrorUploadsToGit();
       const gitRoot = getGitRepoRoot();
+      if (!gitRoot) {
+        return resolve({ success: false, message: 'هذه النسخة لا تعمل داخل مستودع Git، تم تخطي المزامنة' });
+      }
       const addCmd = 'git add public/shop/products.json public/uploads public/itemsMedia';
       exec(addCmd, { cwd: gitRoot }, (err1) => {
         if (err1) {
@@ -205,7 +331,141 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage });
+// Only real images and PDFs, capped in size. Without a filter an uploaded .html
+// would be served from /uploads on this same origin, i.e. stored XSS.
+const ALLOWED_UPLOAD_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf']);
+const ALLOWED_UPLOAD_MIME = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'
+]);
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 12 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (!ALLOWED_UPLOAD_EXT.has(ext) || !ALLOWED_UPLOAD_MIME.has(file.mimetype)) {
+      const err = new Error('نوع الملف غير مسموح، يُقبل فقط: JPG, PNG, WEBP, GIF, PDF');
+      err.status = 400;           // surfaced as-is by the global error handler
+      err.expose = true;
+      return cb(err);
+    }
+    cb(null, true);
+  }
+});
+
+// ==========================================
+// UNIQUE REFERENCE NUMBER GENERATORS
+// ==========================================
+// `Date.now().toString().slice(-6)` repeats roughly every 17 minutes and collides
+// outright within the same millisecond, while these columns are UNIQUE. We derive a
+// candidate, then keep bumping it until the table actually accepts it.
+function generateUniqueRef(prefix, table, column) {
+  const exists = db.prepare(`SELECT 1 FROM ${table} WHERE ${column} = ?`);
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const stamp = Date.now().toString(36).toUpperCase().slice(-6);
+    const rand = Math.floor(Math.random() * 1296).toString(36).toUpperCase().padStart(2, '0');
+    const candidate = `${prefix}-${stamp}${rand}`;
+    if (!exists.get(candidate)) return candidate;
+  }
+  // Practically unreachable; keeps the caller from inserting a duplicate.
+  return `${prefix}-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
+
+const generateRepairTicket = () => generateUniqueRef('REP', 'repairs', 'ticket_number');
+const generateSoftwareTicket = () => generateUniqueRef('SFT', 'software_services', 'ticket_number');
+const generateOrderNumber = () => generateUniqueRef('ORD', 'orders', 'order_number');
+
+// ==========================================
+// ARABIC-AWARE SEARCH
+// ==========================================
+// Typing "سماعه" found nothing while "سماعة" found 8 products, because LIKE
+// compares raw code points. Both sides are folded to one spelling first:
+// alef forms -> ا, ta marbuta -> ه, alef maqsura -> ي, and diacritics dropped.
+const ARABIC_FOLDINGS = [
+  ['أ', 'ا'], ['إ', 'ا'], ['آ', 'ا'], ['ٱ', 'ا'],
+  ['ة', 'ه'], ['ى', 'ي'], ['ؤ', 'و'], ['ئ', 'ي'],
+  ['ـ', ''],                                    // tatweel
+  ['ً', ''], ['ٌ', ''], ['ٍ', ''], // tanween
+  ['َ', ''], ['ُ', ''], ['ِ', ''], // fatha/damma/kasra
+  ['ّ', ''], ['ْ', '']                  // shadda/sukun
+];
+
+function normalizeArabic(text) {
+  let out = String(text || '');
+  for (const [from, to] of ARABIC_FOLDINGS) {
+    out = out.split(from).join(to);
+  }
+  return out.toLowerCase();
+}
+
+// Builds the equivalent folding as a SQL expression over a column
+function arabicSearchExpr(column) {
+  let expr = `LOWER(${column})`;
+  for (const [from, to] of ARABIC_FOLDINGS) {
+    expr = `REPLACE(${expr}, '${from}', '${to}')`;
+  }
+  return expr;
+}
+
+// Produces "(<expr> LIKE ? OR <expr> LIKE ? ...)" plus the matching params
+function buildArabicSearch(columns, term) {
+  const needle = `%${normalizeArabic(term.trim())}%`;
+  const clause = '(' + columns.map(c => `${arabicSearchExpr(c)} LIKE ?`).join(' OR ') + ')';
+  return { clause, params: columns.map(() => needle) };
+}
+
+// Phone numbers arrive in several shapes (spaces, +964, 00964). Compare them normalized.
+function normalizePhone(phone) {
+  let p = (phone || '').replace(/[\s\-\+\(\)]/g, '');
+  if (p.startsWith('00964')) p = '0' + p.slice(5);
+  else if (p.startsWith('964')) p = '0' + p.slice(3);
+  return p;
+}
+
+function parseOrderItems(order) {
+  try {
+    const items = JSON.parse(order.items_json || '[]');
+    return Array.isArray(items) ? items : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+// Puts the items of a cancelled order back into stock. Caller must wrap it in a
+// transaction. Guarded by sold_quantity so a double cancel cannot inflate stock.
+function restoreOrderStock(order) {
+  for (const item of parseOrderItems(order)) {
+    const qty = parseInt(item.qty, 10);
+    if (!Number.isFinite(qty) || qty <= 0 || !item.id) continue;
+    db.prepare(`
+      UPDATE products SET
+        stock_quantity = stock_quantity + ?,
+        sold_quantity = MAX(0, sold_quantity - ?),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(qty, qty, item.id);
+  }
+}
+
+// Re-deducts stock when a cancelled order is reinstated. Refuses if the goods
+// are no longer on the shelf, so the order cannot be revived out of thin air.
+function deductOrderStock(order) {
+  for (const item of parseOrderItems(order)) {
+    const qty = parseInt(item.qty, 10);
+    if (!Number.isFinite(qty) || qty <= 0 || !item.id) continue;
+    const upd = db.prepare(`
+      UPDATE products SET
+        stock_quantity = stock_quantity - ?,
+        sold_quantity = sold_quantity + ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND stock_quantity >= ?
+    `).run(qty, qty, item.id, qty);
+
+    if (upd.changes === 0) {
+      throw new Error(`لا يمكن إعادة تفعيل الطلب: الكمية المتوفرة من (${item.name || item.id}) غير كافية`);
+    }
+  }
+}
 
 // ==========================================
 // TELEGRAM NOTIFICATIONS & STATIC JSON SYNC
@@ -236,10 +496,12 @@ function exportStaticProductsJson() {
 
     // Mirror to git repo root if running from dist
     const gitRoot = getGitRepoRoot();
-    const gitTargetPath = path.join(gitRoot, 'public', 'shop', 'products.json');
-    if (path.resolve(gitTargetPath) !== path.resolve(targetPath)) {
-      fs.mkdirSync(path.dirname(gitTargetPath), { recursive: true });
-      fs.writeFileSync(gitTargetPath, jsonStr, 'utf8');
+    if (gitRoot) {
+      const gitTargetPath = path.join(gitRoot, 'public', 'shop', 'products.json');
+      if (path.resolve(gitTargetPath) !== path.resolve(targetPath)) {
+        fs.mkdirSync(path.dirname(gitTargetPath), { recursive: true });
+        fs.writeFileSync(gitTargetPath, jsonStr, 'utf8');
+      }
     }
 
     mirrorUploadsToGit();
@@ -250,9 +512,15 @@ function exportStaticProductsJson() {
 
 async function sendTelegramProductAlert(prod) {
   try {
-    const token = getSetting('telegram_bot_token') || '8751504494:AAFQhkPA4lX2rFNKDVsdziD1-td03hfgD48';
-    const chatIdsStr = getSetting('telegram_chat_ids') || '1390419753';
+    // Never hardcode the token: it ends up in git history and in the browser.
+    // Configure it via the TELEGRAM_BOT_TOKEN env var or the settings screen.
+    const token = process.env.TELEGRAM_BOT_TOKEN || getSetting('telegram_bot_token');
+    const chatIdsStr = process.env.TELEGRAM_CHAT_IDS || getSetting('telegram_chat_ids') || '';
     const chatIds = chatIdsStr.split(',').map(s => s.trim()).filter(Boolean);
+
+    if (!token || chatIds.length === 0) {
+      return; // Notifications simply stay off until configured
+    }
 
     const priceFmt = (Math.round(prod.selling_price || 0)).toLocaleString('en-US') + ' د.ع';
     const text = `✨ *إضافة منتج جديد في Sigma Store!*
@@ -282,6 +550,46 @@ async function sendTelegramProductAlert(prod) {
   }
 }
 
+async function sendTelegramOrderAlert(order) {
+  try {
+    const token = process.env.TELEGRAM_BOT_TOKEN || getSetting('telegram_bot_token');
+    const chatIdsStr = process.env.TELEGRAM_CHAT_IDS || getSetting('telegram_chat_ids') || '';
+    const chatIds = chatIdsStr.split(',').map(s => s.trim()).filter(Boolean);
+    if (!token || chatIds.length === 0) return;
+
+    const itemsList = order.items
+      .map((it, i) => `\n${i + 1}. ${it.model ? `[${it.model}] ` : ''}${it.name}\n   ▫️ الكمية: ${it.qty} | ${Math.round(it.price * it.qty).toLocaleString('en-US')} د.ع`)
+      .join('');
+
+    let intl = String(order.customer_phone || '').replace(/\D/g, '');
+    if (intl.startsWith('0')) intl = '964' + intl.slice(1);
+
+    const text = `🔔 طلب شراء جديد من متجر Sigma Store!
+━━━━━━━━━━━━━━━━━━
+🔢 رقم الطلب: #${order.orderNumber}
+👤 الزبون: ${order.customer_name}
+📞 الهاتف: ${order.customer_phone}
+📍 الموقع: ذي قار - ${order.district} (${order.address})
+${order.notes ? `📝 ملاحظات: ${order.notes}\n` : ''}━━━━━━━━━━━━━━━━━━
+🛒 المنتجات:${itemsList}
+━━━━━━━━━━━━━━━━━━
+💰 المجموع: ${Math.round(order.total).toLocaleString('en-US')} د.ع
+⏰ ${new Date().toLocaleString('ar-IQ')}
+━━━━━━━━━━━━━━━━━━
+💬 واتساب الزبون: https://wa.me/${intl}`;
+
+    for (const cid of chatIds) {
+      fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: cid, text })
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Failed to dispatch telegram order alert:', err.message);
+  }
+}
+
 // Initial export on startup
 exportStaticProductsJson();
 
@@ -296,9 +604,9 @@ app.get('/api/products', (req, res) => {
     const params = [];
 
     if (search && search.trim()) {
-      query += ' AND (name LIKE ? OR model LIKE ? OR barcode LIKE ? OR brand LIKE ?)';
-      const term = `%${search.trim()}%`;
-      params.push(term, term, term, term);
+      const s = buildArabicSearch(['name', 'model', 'barcode', 'brand', 'category'], search);
+      query += ` AND ${s.clause}`;
+      params.push(...s.params);
     }
 
     if (category && category !== 'all') {
@@ -320,9 +628,30 @@ app.get('/api/products', (req, res) => {
 
     const stmt = db.prepare(query);
     const products = stmt.all(...params);
-    res.json({ success: true, products });
+    // Shoppers must never see cost or wholesale prices
+    res.json({ success: true, products: products.map(p => publicProductView(p, req)) });
   } catch (error) {
     console.error('Error fetching products:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Counts per category for the filter chips. Deliberately NOT mounted under
+// /api/products/... so it can never be captured by the /api/products/:id route.
+app.get('/api/product-categories', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT COALESCE(NULLIF(TRIM(category), ''), 'أخرى') AS category, COUNT(*) AS count
+      FROM products
+      GROUP BY category
+    `).all();
+
+    const total = db.prepare('SELECT COUNT(*) AS c FROM products').get().c;
+    const counts = {};
+    for (const r of rows) counts[r.category] = r.count;
+
+    res.json({ success: true, total, counts });
+  } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -333,7 +662,7 @@ app.get('/api/products/:id', (req, res) => {
     if (!product) {
       return res.status(404).json({ success: false, message: 'المنتج غير موجود' });
     }
-    res.json({ success: true, product });
+    res.json({ success: true, product: publicProductView(product, req) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -376,13 +705,12 @@ app.post('/api/products', (req, res) => {
       cost, // wholesale_price = cost_price
       totalQty,
       totalQty,
-      image_url || '/images/products/eq33.jpg',
+      image_url || '/images/products/EQ33.jpg',
       barcode || `PRD-${Date.now()}`,
       notes || ''
     );
 
-    exportStaticProductsJson();
-    triggerGitHubCloudSync();
+    syncStorefront();
     sendTelegramProductAlert({
       name: name || 'منتج جديد',
       model: model || '',
@@ -454,8 +782,7 @@ app.put('/api/products/:id', (req, res) => {
       id
     );
 
-    exportStaticProductsJson();
-    triggerGitHubCloudSync();
+    syncStorefront();
 
     res.json({ success: true, message: 'تم تحديث بيانات المنتج بنجاح' });
   } catch (error) {
@@ -466,9 +793,11 @@ app.put('/api/products/:id', (req, res) => {
 
 app.delete('/api/products/:id', (req, res) => {
   try {
-    db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
-    exportStaticProductsJson();
-    triggerGitHubCloudSync();
+    const result = db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, message: 'المنتج غير موجود' });
+    }
+    syncStorefront();
     res.json({ success: true, message: 'تم حذف المنتج بنجاح' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -519,6 +848,14 @@ app.post('/api/sales', (req, res) => {
     const qty = parseInt(quantity, 10) || 1;
     const price = parseFloat(unit_price);
     const disc = parseFloat(discount) || 0;
+
+    // Reject non-positive quantities: a negative qty would invent stock and fake profit
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return res.status(400).json({ success: false, message: 'الكمية يجب أن تكون رقماً موجباً' });
+    }
+    if (!Number.isFinite(disc) || disc < 0) {
+      return res.status(400).json({ success: false, message: 'الخصم يجب أن يكون رقماً موجباً أو صفراً' });
+    }
 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(product_id);
     if (!product) {
@@ -602,9 +939,12 @@ app.post('/api/sales', (req, res) => {
           sold_quantity = sold_quantity + ?,
           stock_quantity = stock_quantity - ?,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
+        WHERE id = ? AND stock_quantity >= ?
       `);
-      updateProductStmt.run(qty, qty, product.id);
+      const upd = updateProductStmt.run(qty, qty, product.id, qty);
+      if (upd.changes === 0) {
+        throw new Error(`نفدت الكمية المتوفرة من (${product.name}) أثناء تسجيل البيع`);
+      }
 
       const updatedProduct = db.prepare('SELECT * FROM products WHERE id = ?').get(product.id);
 
@@ -616,6 +956,8 @@ app.post('/api/sales', (req, res) => {
       };
     });
 
+    syncStorefront('SALE');
+
     res.json({
       success: true,
       saleId: result.saleId,
@@ -625,12 +967,156 @@ app.post('/api/sales', (req, res) => {
       isCredit: result.isCredit,
       remainingDebt: result.remainingDebt,
       message: result.isCredit 
-        ? `تم تسجيل البيع بالآجل (دين متبقي: ${result.remainingDebt.toLocaleString()} د.ع)` 
-        : `تم تسجيل البيع نقداً بنجاح وتحقيق ربح بقيمة ${profit.toLocaleString()} د.ع`
+        ? `تم تسجيل البيع بالآجل (دين متبقي: ${result.remainingDebt.toLocaleString('en-US')} د.ع)` 
+        : `تم تسجيل البيع نقداً بنجاح وتحقيق ربح بقيمة ${profit.toLocaleString('en-US')} د.ع`
     });
   } catch (error) {
     console.error('Error recording sale:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Sells a whole cart in ONE transaction. The POS used to fire a separate request
+// per line, so a rejection halfway through left the earlier lines committed with
+// no way back, and a credit sale produced one debt record per item instead of one
+// per invoice.
+app.post('/api/sales/bulk', (req, res) => {
+  try {
+    const {
+      items,
+      customer_name,
+      customer_phone,
+      sold_by,
+      payment_type,
+      initial_paid,
+      debt_notes
+    } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'السلة فارغة' });
+    }
+
+    // Validate everything up front so nothing is written on a bad cart
+    const lines = [];
+    for (const item of items) {
+      const product = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id);
+      if (!product) {
+        return res.status(404).json({ success: false, message: 'أحد المنتجات لم يعد موجوداً في المخزن' });
+      }
+
+      const qty = parseInt(item.quantity, 10);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return res.status(400).json({ success: false, message: `الكمية غير صالحة للمنتج (${product.name})` });
+      }
+      if (product.stock_quantity < qty) {
+        return res.status(400).json({
+          success: false,
+          message: `الكمية المتوفرة من (${product.name}) هي ${product.stock_quantity} فقط، وقد طلبت ${qty}`
+        });
+      }
+
+      const rawPrice = parseFloat(item.unit_price);
+      const price = Number.isFinite(rawPrice) && rawPrice >= 0 ? rawPrice : product.selling_price;
+      const disc = Math.max(0, parseFloat(item.discount) || 0);
+
+      // Iraqi dinars are not fractional; keep the ledger on whole numbers
+      const total = Math.max(0, Math.round(price * qty - disc));
+      const cost = Math.round(product.cost_price * qty);
+
+      lines.push({ product, qty, price, disc, total, profit: total - cost });
+    }
+
+    const grandTotal = lines.reduce((s, l) => s + l.total, 0);
+    const grandProfit = lines.reduce((s, l) => s + l.profit, 0);
+
+    const isCredit = payment_type === 'credit';
+    const paidAmount = isCredit
+      ? Math.min(grandTotal, Math.max(0, Math.round(parseFloat(initial_paid) || 0)))
+      : grandTotal;
+    const remainingDebt = Math.max(0, grandTotal - paidAmount);
+
+    const result = runTransaction(() => {
+      const saleStmt = db.prepare(`
+        INSERT INTO sales (
+          product_id, product_name, product_model, quantity,
+          unit_cost, unit_price, discount, total_amount, profit,
+          customer_name, sold_by, payment_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const stockStmt = db.prepare(`
+        UPDATE products SET
+          sold_quantity = sold_quantity + ?,
+          stock_quantity = stock_quantity - ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND stock_quantity >= ?
+      `);
+
+      const saleIds = [];
+      for (const l of lines) {
+        const r = saleStmt.run(
+          l.product.id, l.product.name, l.product.model, l.qty,
+          l.product.cost_price, l.price, l.disc, l.total, l.profit,
+          customer_name || 'زبون عام',
+          sold_by || 'مدير المتجر',
+          isCredit ? 'credit' : 'cash'
+        );
+        saleIds.push(r.lastInsertRowid);
+
+        const upd = stockStmt.run(l.qty, l.qty, l.product.id, l.qty);
+        if (upd.changes === 0) {
+          throw new Error(`نفدت الكمية المتوفرة من (${l.product.name}) أثناء إتمام البيع`);
+        }
+      }
+
+      // One debt entry for the whole invoice
+      if (isCredit && remainingDebt > 0) {
+        const summary = lines.map(l => `${l.product.model || l.product.name} (${l.qty}x)`).join('، ');
+        const debtRes = db.prepare(`
+          INSERT INTO debts (
+            customer_name, customer_phone, source_type, source_id,
+            items_summary, total_amount, paid_amount, remaining_amount, notes, status
+          ) VALUES (?, ?, 'pos_sale', ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          customer_name || 'زبون آجل',
+          customer_phone || '',
+          saleIds[0],
+          summary,
+          grandTotal,
+          paidAmount,
+          remainingDebt,
+          debt_notes || '',
+          paidAmount > 0 ? 'partially_paid' : 'unpaid'
+        );
+
+        if (paidAmount > 0) {
+          db.prepare(`
+            INSERT INTO debt_payments (debt_id, amount, notes)
+            VALUES (?, ?, 'دفعة أولى عند البيع')
+          `).run(debtRes.lastInsertRowid, paidAmount);
+        }
+      }
+
+      return { saleIds };
+    });
+
+    syncStorefront('SALE');
+
+    res.json({
+      success: true,
+      saleIds: result.saleIds,
+      itemsCount: lines.length,
+      totalAmount: grandTotal,
+      profit: grandProfit,
+      isCredit,
+      paidAmount,
+      remainingDebt,
+      message: isCredit
+        ? `تم تسجيل البيع بالآجل (دين متبقي: ${remainingDebt.toLocaleString('en-US')} د.ع)`
+        : `تم تسجيل البيع نقداً بنجاح وتحقيق ربح بقيمة ${grandProfit.toLocaleString('en-US')} د.ع`
+    });
+  } catch (error) {
+    console.error('Error recording bulk sale:', error);
+    res.status(400).json({ success: false, message: error.message });
   }
 });
 
@@ -655,6 +1141,7 @@ app.delete('/api/sales/:id', (req, res) => {
       db.prepare('DELETE FROM sales WHERE id = ?').run(sale.id);
     });
 
+    syncStorefront('SALE_DELETED');
     res.json({ success: true, message: 'تم إلغاء عملية البيع واسترجاع الكمية للمخزن بنجاح' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -677,9 +1164,9 @@ app.get('/api/repairs', (req, res) => {
     }
 
     if (search && search.trim()) {
-      query += ' AND (customer_name LIKE ? OR customer_phone LIKE ? OR device_model LIKE ? OR ticket_number LIKE ?)';
-      const term = `%${search.trim()}%`;
-      params.push(term, term, term, term);
+      const s = buildArabicSearch(['customer_name', 'customer_phone', 'device_model', 'ticket_number'], search);
+      query += ` AND ${s.clause}`;
+      params.push(...s.params);
     }
 
     query += ' ORDER BY id DESC';
@@ -702,20 +1189,21 @@ app.post('/api/repairs', (req, res) => {
       parts_cost,
       total_charge,
       technician,
-      notes
+      notes,
+      promised_at
     } = req.body;
 
     const parts = parseFloat(parts_cost) || 0;
     const charge = parseFloat(total_charge) || 0;
     const profit = charge - parts;
-    const ticketNumber = `REP-${Date.now().toString().slice(-6)}`;
+    const ticketNumber = generateRepairTicket();
 
     const stmt = db.prepare(`
       INSERT INTO repairs (
         ticket_number, customer_name, customer_phone, device_type,
         device_model, passcode, issue_description, parts_cost,
-        total_charge, profit, loss_cost, loss_reason, status, technician, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', 'pending', ?, ?)
+        total_charge, profit, loss_cost, loss_reason, status, technician, notes, promised_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', 'pending', ?, ?, ?)
     `);
 
     const result = stmt.run(
@@ -730,7 +1218,8 @@ app.post('/api/repairs', (req, res) => {
       charge,
       profit,
       technician || 'فني الصيانة',
-      notes || ''
+      notes || '',
+      promised_at || null
     );
 
     res.json({
@@ -766,7 +1255,8 @@ app.put('/api/repairs/:id', (req, res) => {
       loss_reason,
       status,
       technician,
-      notes
+      notes,
+      promised_at
     } = req.body;
 
     const parts = parts_cost !== undefined ? parseFloat(parts_cost) : existing.parts_cost;
@@ -797,7 +1287,8 @@ app.put('/api/repairs/:id', (req, res) => {
         customer_name = ?, customer_phone = ?, device_type = ?,
         device_model = ?, passcode = ?, issue_description = ?,
         parts_cost = ?, total_charge = ?, profit = ?, loss_cost = ?, loss_reason = ?,
-        status = ?, technician = ?, notes = ?, completed_at = ?, delivered_at = ?
+        status = ?, technician = ?, notes = ?, completed_at = ?, delivered_at = ?,
+        promised_at = ?
       WHERE id = ?
     `);
 
@@ -818,6 +1309,7 @@ app.put('/api/repairs/:id', (req, res) => {
       notes !== undefined ? notes : existing.notes,
       completedAt,
       deliveredAt,
+      promised_at !== undefined ? (promised_at || null) : existing.promised_at,
       id
     );
 
@@ -857,9 +1349,9 @@ app.get('/api/software', (req, res) => {
     }
 
     if (search && search.trim()) {
-      query += ' AND (customer_name LIKE ? OR customer_phone LIKE ? OR device_model LIKE ? OR service_type LIKE ? OR ticket_number LIKE ?)';
-      const term = `%${search.trim()}%`;
-      params.push(term, term, term, term, term);
+      const s = buildArabicSearch(['customer_name', 'customer_phone', 'device_model', 'service_type', 'ticket_number'], search);
+      query += ` AND ${s.clause}`;
+      params.push(...s.params);
     }
 
     query += ' ORDER BY id DESC';
@@ -887,7 +1379,7 @@ app.post('/api/software', (req, res) => {
     const cost = parseFloat(tool_cost) || 0;
     const charge = parseFloat(total_charge) || 0;
     const profit = charge - cost;
-    const ticketNumber = `SFT-${Date.now().toString().slice(-6)}`;
+    const ticketNumber = generateSoftwareTicket();
 
     const stmt = db.prepare(`
       INSERT INTO software_services (
@@ -915,7 +1407,7 @@ app.post('/api/software', (req, res) => {
       id: result.lastInsertRowid,
       ticketNumber,
       profit,
-      message: `تم تسجيل خدمة السوفت وير بنجاح بربح (+${profit.toLocaleString()} د.ع)`
+      message: `تم تسجيل خدمة السوفت وير بنجاح بربح (+${profit.toLocaleString('en-US')} د.ع)`
     });
   } catch (error) {
     console.error('Error creating software service:', error);
@@ -990,6 +1482,13 @@ app.delete('/api/software/:id', (req, res) => {
 // ==========================================
 
 app.post('/api/invoices/import-pdf', upload.single('pdfFile'), async (req, res) => {
+  // The uploaded PDF is only needed for parsing; never leave it sitting in /uploads
+  const cleanupUpload = () => {
+    if (req.file && req.file.path) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+    }
+  };
+
   try {
     let buffer;
     if (req.file) {
@@ -999,15 +1498,18 @@ app.post('/api/invoices/import-pdf', upload.single('pdfFile'), async (req, res) 
       if (fs.existsSync(defaultPdfPath)) {
         buffer = fs.readFileSync(defaultPdfPath);
       } else {
+        cleanupUpload();
         return res.status(400).json({ success: false, message: 'يرجى رفع ملف الفاتورة بصيغة PDF' });
       }
     }
 
     const parsedData = await parseSupplierInvoice(buffer);
+    cleanupUpload();
     res.json({ success: true, data: parsedData });
   } catch (error) {
+    cleanupUpload();
     console.error('Error parsing PDF invoice:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'تعذر قراءة ملف الفاتورة، تأكد أنه ملف PDF سليم' });
   }
 });
 
@@ -1056,7 +1558,7 @@ app.post('/api/invoices/confirm-import', (req, res) => {
           cost,
           qty,
           qty,
-          p.image_url || '/images/products/eq33.jpg',
+          p.image_url || '/images/products/EQ33.jpg',
           p.barcode || `INV${invoiceNumber}-${p.model || Math.random()}`,
           `مستورد من فاتورة رقم ${invoiceNumber}`
         );
@@ -1136,12 +1638,19 @@ app.post('/api/apply-product-image', async (req, res) => {
 
     // If external URL, download and save locally for offline support
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-      const ext = path.extname(imageUrl.split('?')[0]) || '.jpg';
+      let ext = path.extname(imageUrl.split('?')[0]).toLowerCase();
+      if (!ALLOWED_UPLOAD_EXT.has(ext) || ext === '.pdf') ext = '.jpg';
       const filename = `brand-img-${Date.now()}-${Math.round(Math.random()*1000)}${ext}`;
       const localPath = await downloadAndSaveImage(imageUrl, filename);
-      if (localPath) {
-        finalImageUrl = localPath;
+      if (!localPath) {
+        // Blocked (private/internal address) or simply unreachable. Storing the raw
+        // URL would leave a broken, unvetted link on the product.
+        return res.status(400).json({
+          success: false,
+          message: 'تعذر تحميل الصورة من هذا الرابط، تأكد أنه رابط صورة عام وصحيح'
+        });
       }
+      finalImageUrl = localPath;
     }
 
     // If requested, composite onto Master Studio Podium
@@ -1156,8 +1665,7 @@ app.post('/api/apply-product-image', async (req, res) => {
     // Update SQLite database
     db.prepare('UPDATE products SET image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(finalImageUrl, productId);
 
-    exportStaticProductsJson();
-    triggerGitHubCloudSync();
+    syncStorefront();
 
     res.json({
       success: true,
@@ -1394,9 +1902,9 @@ app.get('/api/debts', (req, res) => {
     const params = [];
 
     if (search && search.trim()) {
-      query += ' AND (customer_name LIKE ? OR customer_phone LIKE ? OR items_summary LIKE ? OR notes LIKE ?)';
-      const term = `%${search.trim()}%`;
-      params.push(term, term, term, term);
+      const s = buildArabicSearch(['customer_name', 'customer_phone', 'items_summary', 'notes'], search);
+      query += ` AND ${s.clause}`;
+      params.push(...s.params);
     }
 
     if (status && status !== 'all') {
@@ -1461,7 +1969,7 @@ app.post('/api/debts/payment', (req, res) => {
       paidAmount: payAmount,
       remaining: newRemaining,
       status: newStatus,
-      message: `تم تسجيل سداد مبلغ ${payAmount.toLocaleString()} د.ع بنجاح`
+      message: `تم تسجيل سداد مبلغ ${payAmount.toLocaleString('en-US')} د.ع بنجاح`
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1502,7 +2010,7 @@ app.get('/api/settings', (req, res) => {
     const rows = db.prepare('SELECT key, value FROM settings').all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
-    res.json({ success: true, settings });
+    res.json({ success: true, settings: publicSettingsView(settings, req) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1516,6 +2024,7 @@ app.post('/api/settings', (req, res) => {
         setSetting(key, value);
       }
     }
+    syncStorefront('SETTINGS');
     res.json({ success: true, message: 'تم حفظ الإعدادات بنجاح' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1593,24 +2102,39 @@ app.post('/api/shop/orders', (req, res) => {
       return res.status(400).json({ success: false, message: 'سلة المشتريات فارغة' });
     }
 
-    const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+    const orderNumber = generateOrderNumber();
     let calculatedTotal = 0;
 
-    const validatedItems = items.map(item => {
-      const p = db.prepare('SELECT id, name, model, selling_price, cost_price, image_url, stock_quantity FROM products WHERE id = ?').get(item.id);
-      const qty = parseInt(item.qty, 10) || 1;
-      const price = p ? p.selling_price : (parseFloat(item.price) || 0);
-      calculatedTotal += price * qty;
+    // Every item must resolve to a real product; prices always come from the DB,
+    // never from the request body, and quantity may not exceed available stock.
+    const validatedItems = [];
+    for (const item of items) {
+      const p = db.prepare('SELECT id, name, model, selling_price, image_url, stock_quantity FROM products WHERE id = ?').get(item.id);
+      if (!p) {
+        return res.status(400).json({ success: false, message: `أحد المنتجات في سلتك لم يعد متوفراً في المتجر` });
+      }
 
-      return {
-        id: item.id,
-        name: p ? p.name : item.name,
-        model: p ? p.model : item.model,
-        price,
+      const qty = parseInt(item.qty, 10);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        return res.status(400).json({ success: false, message: `الكمية المطلوبة للمنتج (${p.name}) غير صالحة` });
+      }
+      if (qty > p.stock_quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `الكمية المتوفرة من (${p.name}) هي ${p.stock_quantity} قطعة فقط، وقد طلبت ${qty}`
+        });
+      }
+
+      calculatedTotal += p.selling_price * qty;
+      validatedItems.push({
+        id: p.id,
+        name: p.name,
+        model: p.model,
+        price: p.selling_price,
         qty,
-        image_url: p ? p.image_url : (item.image_url || '/images/products/eq33.jpg')
-      };
-    });
+        image_url: p.image_url || '/images/products/EQ33.jpg'
+      });
+    }
 
     const result = runTransaction(() => {
       const district = (req.body.district || 'الناصرية').trim();
@@ -1646,18 +2170,36 @@ app.post('/api/shop/orders', (req, res) => {
         `).run(customer_name.trim(), customer_phone.trim(), district, address || '');
       } catch(e) {}
 
-      // Decrement stock for ordered items
+      // Decrement stock for ordered items. The WHERE guard makes this safe against
+      // two orders racing for the last piece: the loser matches 0 rows and we abort.
       for (const item of validatedItems) {
-        db.prepare(`
+        const upd = db.prepare(`
           UPDATE products SET
-            stock_quantity = MAX(0, stock_quantity - ?),
+            stock_quantity = stock_quantity - ?,
             sold_quantity = sold_quantity + ?,
             updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).run(item.qty, item.qty, item.id);
+          WHERE id = ? AND stock_quantity >= ?
+        `).run(item.qty, item.qty, item.id, item.qty);
+
+        if (upd.changes === 0) {
+          throw new Error(`نفدت الكمية المتوفرة من (${item.name}) أثناء إتمام الطلب، يرجى تعديل سلتك`);
+        }
       }
 
       return orderRes;
+    });
+
+    syncStorefront('ONLINE_ORDER');
+
+    sendTelegramOrderAlert({
+      orderNumber,
+      customer_name: customer_name.trim(),
+      customer_phone: customer_phone.trim(),
+      district: (req.body.district || 'الناصرية').trim(),
+      address: address || 'توصيل للمنزل داخل محافظة ذي قار',
+      notes,
+      items: validatedItems,
+      total: calculatedTotal
     });
 
     res.json({
@@ -1683,7 +2225,7 @@ const activeOtps = new Map();
 app.post('/api/customer/request-otp', (req, res) => {
   try {
     const { phone, name, district, address, otp } = req.body;
-    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const cleanPhone = normalizePhone(phone);
     const code = otp || Math.floor(100000 + Math.random() * 900000).toString();
     
     activeOtps.set(cleanPhone, {
@@ -1705,7 +2247,7 @@ app.post('/api/customer/request-otp', (req, res) => {
 app.post('/api/customer/register', (req, res) => {
   try {
     const { name, phone, district, address, is_verified } = req.body;
-    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const cleanPhone = normalizePhone(phone);
     if (!cleanPhone || !name) {
       return res.status(400).json({ success: false, message: 'الاسم ورقم الهاتف مطلوبان' });
     }
@@ -1733,7 +2275,7 @@ app.post('/api/customer/register', (req, res) => {
 app.post('/api/customer/login', (req, res) => {
   try {
     const { phone } = req.body;
-    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const cleanPhone = normalizePhone(phone);
     const customer = db.prepare('SELECT * FROM customers WHERE phone = ?').get(cleanPhone);
     if (!customer) {
       return res.status(404).json({ success: false, message: 'رقم الهاتف غير مسجل' });
@@ -1748,12 +2290,21 @@ app.post('/api/customer/login', (req, res) => {
 app.put('/api/customer/profile', (req, res) => {
   try {
     const { name, phone, district, address } = req.body;
-    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
-    db.prepare(`
+    const cleanPhone = normalizePhone(phone);
+    // `name.trim()` threw a 500 whenever name was absent
+    if (!cleanPhone || !name || !String(name).trim()) {
+      return res.status(400).json({ success: false, message: 'الاسم ورقم الهاتف مطلوبان' });
+    }
+
+    const result = db.prepare(`
       UPDATE customers SET
         name = ?, district = ?, address = ?, updated_at = CURRENT_TIMESTAMP
       WHERE phone = ?
-    `).run(name.trim(), district || 'الناصرية', address || '', cleanPhone);
+    `).run(String(name).trim(), district || 'الناصرية', address || '', cleanPhone);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, message: 'لا يوجد حساب مسجل بهذا الرقم' });
+    }
 
     const customer = db.prepare('SELECT * FROM customers WHERE phone = ?').get(cleanPhone);
     res.json({ success: true, customer });
@@ -1766,7 +2317,7 @@ app.put('/api/customer/profile', (req, res) => {
 app.get('/api/customer/orders', (req, res) => {
   try {
     const { phone } = req.query;
-    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const cleanPhone = normalizePhone(phone);
     const orders = db.prepare('SELECT * FROM orders WHERE customer_phone = ? ORDER BY id DESC').all(cleanPhone);
     const formatted = orders.map(o => ({
       ...o,
@@ -1784,22 +2335,34 @@ app.get('/api/customer/orders', (req, res) => {
 app.post('/api/customer/cancel-order', (req, res) => {
   try {
     const { orderNumber, phone } = req.body;
-    const cleanPhone = (phone || '').replace(/[\s\-\+]/g, '');
+    const cleanPhone = normalizePhone(phone);
+    if (!cleanPhone) {
+      return res.status(400).json({ success: false, message: 'رقم الهاتف مطلوب لإلغاء الطلب' });
+    }
+
     const order = db.prepare('SELECT * FROM orders WHERE order_number = ?').get(orderNumber);
     if (!order) {
       return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
+    }
+    // The order must belong to the caller, otherwise anyone could cancel anyone's order
+    if (normalizePhone(order.customer_phone) !== cleanPhone) {
+      return res.status(403).json({ success: false, message: 'لا تملك صلاحية إلغاء هذا الطلب' });
     }
     if (order.status !== 'pending') {
       return res.status(400).json({ success: false, message: 'لا يمكن إلغاء الطلب لأنه قيد المعالجة أو تم شحنه بالفعل' });
     }
 
-    db.prepare(`
-      UPDATE orders SET
-        status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP, cancelled_by = 'customer'
-      WHERE order_number = ?
-    `).run(orderNumber);
+    runTransaction(() => {
+      restoreOrderStock(order);
+      db.prepare(`
+        UPDATE orders SET
+          status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP, cancelled_by = 'customer'
+        WHERE order_number = ?
+      `).run(orderNumber);
+    });
 
-    res.json({ success: true, message: 'تم إلغاء الطلب بنجاح' });
+    syncStorefront('ORDER_CANCELLED');
+    res.json({ success: true, message: 'تم إلغاء الطلب وإرجاع الكميات للمخزن بنجاح' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -1820,13 +2383,46 @@ app.get('/api/shop/orders', (req, res) => {
 });
 
 // Update online order status
+const ALLOWED_ORDER_STATUSES = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'];
+
 app.put('/api/shop/orders/:id/status', (req, res) => {
   try {
     const { status } = req.body;
-    db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, req.params.id);
+    if (!ALLOWED_ORDER_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, message: 'حالة الطلب غير معروفة' });
+    }
+
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'الطلب غير موجود' });
+    }
+    if (order.status === status) {
+      return res.json({ success: true, message: 'حالة الطلب لم تتغير' });
+    }
+
+    runTransaction(() => {
+      // Moving into cancelled returns the goods; moving back out takes them again.
+      if (status === 'cancelled') {
+        restoreOrderStock(order);
+        db.prepare(`
+          UPDATE orders SET status = ?, cancelled_at = CURRENT_TIMESTAMP, cancelled_by = 'store'
+          WHERE id = ?
+        `).run(status, order.id);
+      } else {
+        if (order.status === 'cancelled') {
+          deductOrderStock(order);
+        }
+        db.prepare(`
+          UPDATE orders SET status = ?, cancelled_at = NULL, cancelled_by = NULL
+          WHERE id = ?
+        `).run(status, order.id);
+      }
+    });
+
+    syncStorefront('ORDER_STATUS');
     res.json({ success: true, message: 'تم تحديث حالة الطلب بنجاح' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(400).json({ success: false, message: error.message });
   }
 });
 
@@ -1852,11 +2448,54 @@ app.get('/api/shop/track-repair/:query', (req, res) => {
   }
 });
 
+// ==========================================
+// GLOBAL ERROR HANDLER
+// ==========================================
+// Without this, multer rejections and malformed JSON bodies fall through to
+// Express's default handler, which answers with an HTML stack trace.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+
+  console.error(`[${req.method} ${req.path}]`, err);
+
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ success: false, message: 'حجم الملف كبير جداً' });
+  }
+  if (err && (err.type === 'entity.parse.failed' || err instanceof SyntaxError)) {
+    return res.status(400).json({ success: false, message: 'صيغة البيانات المرسلة غير صحيحة' });
+  }
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ success: false, message: 'حجم البيانات المرسلة كبير جداً' });
+  }
+  // Errors we raised ourselves carry a message meant for the user
+  if (err && err.expose && err.status) {
+    return res.status(err.status).json({ success: false, message: err.message });
+  }
+
+  // Internal details stay in the server log, not in the response
+  res.status(500).json({ success: false, message: 'حدث خطأ غير متوقع في الخادم' });
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`====================================================`);
   console.log(`  🚀 نظام Sigma Store الداخلي يعمل الآن بنجاح!`);
   console.log(`  🔗 لوحة الإدارة الداخلية: http://localhost:${PORT}`);
   console.log(`  🛍️ متجر الزبائن الإلكتروني: http://localhost:${PORT}/shop`);
+  console.log(`====================================================`);
+
+  if (generatedAdminPassword) {
+    console.log(``);
+    console.log(`  ╔══════════════════════════════════════════════╗`);
+    console.log(`  ║   🔐 كلمة مرور الإدارة (احفظها الآن!)        ║`);
+    console.log(`  ╠══════════════════════════════════════════════╣`);
+    console.log(`  ║        ${generatedAdminPassword}                     ║`);
+    console.log(`  ╚══════════════════════════════════════════════╝`);
+    console.log(`  تظهر هذه الرسالة مرة واحدة فقط.`);
+    console.log(`  يمكنك تغييرها من شاشة الإعدادات في لوحة الإدارة.`);
+    console.log(``);
+  }
+  console.log(`  ℹ️  الدخول من هذا الجهاز لا يحتاج كلمة مرور.`);
+  console.log(`     الدخول من الإنترنت أو الشبكة يحتاجها.`);
   console.log(`====================================================`);
 });

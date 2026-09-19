@@ -29,7 +29,7 @@ const KNOWN_MODELS = {
     model: 'EQ33',
     brand: 'Hoco',
     category: 'سماعات',
-    image_url: '/images/products/eq33.jpg'
+    image_url: '/images/products/EQ33.jpg'
   },
   'E37': {
     name: 'سماعة بلوتوث أحادية هوكو E37 للأعمال والاتصال',
@@ -288,7 +288,7 @@ function findModelData(modelString, rawName = '') {
     model: modelString.trim(),
     brand,
     category,
-    image_url: '/images/products/eq33.jpg'
+    image_url: '/images/products/EQ33.jpg'
   };
 }
 

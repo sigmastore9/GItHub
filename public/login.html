@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sigma Store - تسجيل الدخول</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #141b2d;
+      --border: #243049;
+      --text: #e6edf7;
+      --muted: #8b9ab5;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 0%, #16203a 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      padding: 16px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 26px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+      text-align: center;
+    }
+    .logo {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 14px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      color: #fff;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+    .field { position: relative; margin-bottom: 14px; }
+    input[type="password"] {
+      width: 100%;
+      padding: 13px 44px 13px 14px;
+      background: #0e1626;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    input[type="password"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, .15);
+    }
+    .field > i {
+      position: absolute;
+      right: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 14px;
+      pointer-events: none;
+    }
+    button {
+      width: 100%;
+      padding: 13px;
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #0ea5e9);
+      color: #04121f;
+      font-size: 15px;
+      font-weight: 800;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .error {
+      display: none;
+      margin-top: 14px;
+      padding: 10px;
+      border-radius: 9px;
+      background: rgba(239, 68, 68, .12);
+      border: 1px solid rgba(239, 68, 68, .35);
+      color: #fca5a5;
+      font-size: 13px;
+    }
+    .shop-link {
+      display: block;
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .shop-link:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main class="login-card">
+    <div class="logo"><i class="fa-solid fa-shield-halved"></i></div>
+    <h1>لوحة إدارة Sigma Store</h1>
+    <p class="sub">هذه الصفحة محمية — أدخل كلمة مرور الإدارة للمتابعة</p>
+
+    <form id="loginForm" autocomplete="off">
+      <div class="field">
+        <input type="password" id="passwordInput" placeholder="كلمة المرور" required autofocus>
+        <i class="fa-solid fa-lock"></i>
+      </div>
+      <button type="submit" id="loginBtn">
+        <i class="fa-solid fa-right-to-bracket"></i> دخول
+      </button>
+    </form>
+
+    <div class="error" id="errorBox"></div>
+
+    <a class="shop-link" href="/shop/">
+      <i class="fa-solid fa-store"></i> الذهاب إلى متجر الزبائن
+    </a>
+  </main>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const btn = document.getElementById('loginBtn');
+    const errorBox = document.getElementById('errorBox');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('passwordInput').value;
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحقق...';
+      errorBox.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          window.location.replace('/');
+          return;
+        }
+        errorBox.textContent = data.message || 'كلمة المرور غير صحيحة';
+        errorBox.style.display = 'block';
+      } catch (err) {
+        errorBox.textContent = 'تعذر الاتصال بالخادم';
+        errorBox.style.display = 'block';
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
+      document.getElementById('passwordInput').select();
+    });
+  </script>
+</body>
+</html>

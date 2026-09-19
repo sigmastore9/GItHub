@@ -99,8 +99,40 @@ function detectBrand(modelStr = '', nameStr = '') {
   return 'hoco'; // Default to Hoco
 }
 
-function fetchUrl(url, timeoutMs = 8000) {
+const MAX_REDIRECTS = 5;
+
+// Blocks requests aimed at the machine itself or the local network. Without this,
+// an image URL is enough to make the server probe internal services (SSRF).
+const BLOCKED_HOST_PATTERNS = [
+  /^localhost$/i,
+  /^127\./,
+  /^0\./,
+  /^10\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /^169\.254\./,          // cloud metadata endpoints live here
+  /^::1$/,
+  /^\[?::1\]?$/,
+  /^fe80:/i,
+  /^f[cd][0-9a-f]{2}:/i,
+  /\.local$/i,
+  /\.internal$/i
+];
+
+function isSafeRemoteUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.replace(/^\[|\]$/g, '');
+    return !BLOCKED_HOST_PATTERNS.some(p => p.test(host));
+  } catch (_) {
+    return false;
+  }
+}
+
+function fetchUrl(url, timeoutMs = 8000, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve) => {
+    if (!isSafeRemoteUrl(url)) return resolve('');
     try {
       const client = url.startsWith('https') ? https : http;
       const req = client.get(url, {
@@ -112,16 +144,22 @@ function fetchUrl(url, timeoutMs = 8000) {
         timeout: timeoutMs
       }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          if (redirectsLeft <= 0) return resolve('');
           let nextUrl = res.headers.location;
           if (!nextUrl.startsWith('http')) {
             const parsed = new URL(url);
             nextUrl = parsed.origin + nextUrl;
           }
-          return fetchUrl(nextUrl, timeoutMs).then(resolve);
+          return fetchUrl(nextUrl, timeoutMs, redirectsLeft - 1).then(resolve);
         }
         if (res.statusCode !== 200) {
+          res.resume();
           return resolve('');
         }
+        // Without an explicit encoding, multi-byte characters split across chunk
+        // boundaries get mangled when Buffers are concatenated onto a string.
+        res.setEncoding('utf8');
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => resolve(data));
@@ -197,13 +235,15 @@ function searchWebImages(query, maxResults = 100) {
 /**
  * Downloads an external image to /uploads/
  */
-function downloadAndSaveImage(imageUrl, destFilename) {
+function downloadAndSaveImage(imageUrl, destFilename, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve) => {
+    if (!isSafeRemoteUrl(imageUrl)) return resolve(null);
     try {
       const uploadsDir = path.join(__dirname, '..', 'public', 'uploads');
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
-      const destPath = path.join(uploadsDir, destFilename);
+      // Keep the name inside the uploads folder no matter what the caller passed
+      const destPath = path.join(uploadsDir, path.basename(destFilename));
       const file = fs.createWriteStream(destPath);
       const client = imageUrl.startsWith('https') ? https : http;
 
@@ -214,14 +254,21 @@ function downloadAndSaveImage(imageUrl, destFilename) {
         timeout: 12000
       }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          // Close and remove the stream we already opened, otherwise every hop
+          // leaks a file handle onto the same destination path
+          file.close(() => { try { fs.unlinkSync(destPath); } catch(_) {} });
+          if (redirectsLeft <= 0) return resolve(null);
+
           let nextUrl = res.headers.location;
           if (!nextUrl.startsWith('http')) {
             const parsed = new URL(imageUrl);
             nextUrl = parsed.origin + nextUrl;
           }
-          return downloadAndSaveImage(nextUrl, destFilename).then(resolve);
+          return downloadAndSaveImage(nextUrl, destFilename, redirectsLeft - 1).then(resolve);
         }
         if (res.statusCode !== 200) {
+          res.resume();
           file.close();
           try { fs.unlinkSync(destPath); } catch(_) {}
           return resolve(null);
@@ -337,12 +384,6 @@ async function compositeOntoMasterPodium(rawImagePath, outputFilename) {
 
     const destPath = path.join(uploadsDir, outputFilename);
     fs.writeFileSync(destPath, outputBuffer);
-
-    // Also mirror to dist if exists
-    const distUploads = path.join(__dirname, '..', 'dist', 'MY Store-win32-x64', 'resources', 'app', 'public', 'uploads');
-    if (fs.existsSync(distUploads)) {
-      fs.writeFileSync(path.join(distUploads, outputFilename), outputBuffer);
-    }
 
     return `/uploads/${outputFilename}`;
   } catch (err) {

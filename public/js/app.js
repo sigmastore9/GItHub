@@ -1,5 +1,5 @@
 // ==========================================================
-// MY STORE INTERNAL ERP - APP LOGIC & STATE (UPDATED)
+// SIGMA STORE INTERNAL ERP - APP LOGIC & STATE
 // ==========================================================
 
 // Real-Time Cross-Window Sync with Customer Shop & Mobile Devices (Sigma Store)
@@ -67,7 +67,6 @@ const state = {
 // 1. INITIALIZATION & NAVIGATION
 // ==========================================================
 document.addEventListener('DOMContentLoaded', () => {
-  initSidebarState();
   loadSettings();
   loadStats();
   loadProducts();
@@ -78,30 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
   loadDebts();
 });
 
-// Sidebar Collapse / Expand Functionality
-function toggleSidebar() {
-  const sidebar = document.getElementById('appSidebar') || document.querySelector('.app-sidebar');
-  const toggleIcon = document.getElementById('sidebarToggleIcon');
-  if (!sidebar) return;
-
-  const isCollapsed = sidebar.classList.toggle('collapsed');
-  localStorage.setItem('sigma_sidebar_collapsed', isCollapsed ? 'true' : 'false');
-
-  if (toggleIcon) {
-    toggleIcon.className = isCollapsed ? 'fa-solid fa-angles-left' : 'fa-solid fa-angles-right';
-  }
-}
-
-function initSidebarState() {
-  if (localStorage.getItem('sigma_sidebar_collapsed') === 'true') {
-    const sidebar = document.getElementById('appSidebar') || document.querySelector('.app-sidebar');
-    const toggleIcon = document.getElementById('sidebarToggleIcon');
-    if (sidebar) {
-      sidebar.classList.add('collapsed');
-      if (toggleIcon) toggleIcon.className = 'fa-solid fa-angles-left';
-    }
-  }
-}
+// The sidebar now expands and collapses purely on hover (see .app-sidebar and
+// .app-sidebar:not(:hover) in style.css), so no toggle button or stored state.
 
 function switchTab(tabId) {
   state.activeTab = tabId;
@@ -134,18 +111,54 @@ function switchTab(tabId) {
   }
 }
 
+// When the admin session expires every request starts coming back 401, which would
+// otherwise leave the panel silently empty. Reloading lands on the login screen.
+(function interceptAuthFailures() {
+  const nativeFetch = window.fetch.bind(window);
+  let redirecting = false;
+
+  window.fetch = async (...args) => {
+    const res = await nativeFetch(...args);
+    if (res.status === 401 && !redirecting) {
+      const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+      if (url.includes('/api/') && !url.includes('/api/auth/')) {
+        redirecting = true;
+        window.location.replace('/');
+      }
+    }
+    return res;
+  };
+})();
+
+// Order and customer text arrives from the public storefront, where anyone can
+// type anything. Always run it through this before putting it in innerHTML.
+function escapeHtml(value) {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Money and counts use Western digits so the admin panel, the customer shop, the
+// printed receipts and the Telegram alerts all read the same. Dates stay on
+// 'ar-IQ'. Change MONEY_LOCALE alone to switch every number back to ٣٬٢٥٠ style.
+const MONEY_LOCALE = 'en-US';
+
 function formatCurrency(amount) {
   if (amount === undefined || amount === null || isNaN(amount)) return '0 د.ع';
-  const num = Number(amount);
+  const num = Math.round(Number(amount));
   if (num < 0) {
-    return `-${Math.abs(num).toLocaleString('ar-IQ')} د.ع`;
+    return `-${Math.abs(num).toLocaleString(MONEY_LOCALE)} د.ع`;
   }
-  return num.toLocaleString('ar-IQ') + ' د.ع';
+  return num.toLocaleString(MONEY_LOCALE) + ' د.ع';
 }
 
 function formatNumber(num) {
   if (num === undefined || num === null || isNaN(num)) return '0';
-  return Number(num).toLocaleString('ar-IQ');
+  return Number(num).toLocaleString(MONEY_LOCALE);
 }
 
 function showToast(message, type = 'success') {
@@ -268,7 +281,7 @@ function renderTopSellers(topSellers) {
     item.innerHTML = `
       <div class="d-flex align-center">
         <span class="${rankClass}">${medal}</span>
-        <img src="${p.image_url || '/images/products/eq33.jpg'}" class="item-thumb-sm" onerror="this.src='/images/products/eq33.jpg'">
+        <img src="${p.image_url || '/images/products/EQ33.jpg'}" class="item-thumb-sm" onerror="this.src='/images/products/EQ33.jpg'">
         <div>
           <strong class="text-info">${p.model || p.name}</strong>
           <div style="font-size:11px; color:var(--text-muted);">${p.category} | ${p.brand || 'Hoco'}</div>
@@ -305,7 +318,7 @@ function renderDeadStock(deadStock) {
     item.className = 'dead-stock-item';
     item.innerHTML = `
       <div class="d-flex align-center">
-        <img src="${p.image_url || '/images/products/eq33.jpg'}" class="item-thumb-sm" onerror="this.src='/images/products/eq33.jpg'">
+        <img src="${p.image_url || '/images/products/EQ33.jpg'}" class="item-thumb-sm" onerror="this.src='/images/products/EQ33.jpg'">
         <div>
           <strong class="text-warning">${p.model || p.name}</strong>
           <div style="font-size:11px; color:var(--text-muted);">
@@ -352,13 +365,13 @@ async function loadProducts() {
       empty.style.display = 'block';
       grid.innerHTML = '';
       document.getElementById('productsTableBody').innerHTML = '';
-      updateCategoryCounts([]);
+      updateCategoryCounts();
       return;
     }
 
     state.products = data.products;
     renderProducts();
-    updateCategoryCounts(state.products);
+    updateCategoryCounts();
   } catch (error) {
     loading.style.display = 'none';
     showToast('حدث خطأ أثناء تحميل المنتجات', 'error');
@@ -405,8 +418,27 @@ function setViewMode(mode) {
   document.getElementById('productsTableContainer').style.display = mode === 'table' ? 'block' : 'none';
 }
 
-function updateCategoryCounts(products) {
-  document.getElementById('catCountAll').textContent = products.length;
+// Counts come from the server rather than the rendered list, because the list is
+// already filtered by search/category and would otherwise count only what is shown.
+async function updateCategoryCounts() {
+  try {
+    const res = await fetch('/api/product-categories');
+    const data = await res.json();
+    if (!data.success) return;
+
+    document.querySelectorAll('.category-chips .chip').forEach(chip => {
+      const cat = chip.getAttribute('data-category');
+      const countEl = chip.querySelector('.chip-count');
+      if (!countEl) return;
+
+      const n = cat === 'all' ? data.total : (data.counts[cat] || 0);
+      countEl.textContent = formatNumber(n);
+      // Dim categories with nothing in them so the eye skips straight to stock
+      chip.classList.toggle('is-empty', n === 0 && cat !== 'all');
+    });
+  } catch (error) {
+    console.error('Error loading category counts:', error);
+  }
 }
 
 function renderProducts() {
@@ -425,7 +457,7 @@ function renderProducts() {
     if (p.stock_quantity <= 0) stockClass += ' out';
     else if (p.stock_quantity <= lowStockLimit) stockClass += ' low';
 
-    const fallbackImg = '/images/products/eq33.jpg';
+    const fallbackImg = '/images/products/EQ33.jpg';
     const cacheBuster = p.updated_at ? encodeURIComponent(p.updated_at) : Date.now();
     const imgSrc = p.image_url ? (p.image_url.includes('?') ? p.image_url : `${p.image_url}?v=${cacheBuster}`) : fallbackImg;
 
@@ -1301,7 +1333,7 @@ function handlePosBarcodeEnter(event) {
 function renderPosCatalog() {
   const grid = document.getElementById('posProductsGrid');
   grid.innerHTML = '';
-  const fallbackImg = '/images/products/eq33.jpg';
+  const fallbackImg = '/images/products/EQ33.jpg';
 
   if (state.posProducts.length === 0) {
     grid.innerHTML = '<div class="p-4 text-center text-muted" style="grid-column: 1/-1;">لا توجد منتجات مطابقة للبحث أو الصنف المختار</div>';
@@ -1484,6 +1516,37 @@ function renderPosCartSummary() {
   if (remainingDebtEl) {
     remainingDebtEl.textContent = formatCurrency(remainingDebt);
   }
+
+  renderCashChange(finalSelling);
+}
+
+// Works out the change owed back, so the cashier never does it in their head.
+function renderCashChange(amountDue) {
+  const box = document.getElementById('cartCashBox');
+  const receivedEl = document.getElementById('cartAmountReceived');
+  const changeEl = document.getElementById('cartChangeDue');
+  if (!box || !receivedEl || !changeEl) return;
+
+  // Only meaningful for a cash sale; credit has its own "initial paid" field
+  const isCredit = state.posPaymentType === 'credit';
+  box.style.display = isCredit ? 'none' : 'block';
+  if (isCredit) return;
+
+  const received = parseFloat(receivedEl.value);
+  if (!Number.isFinite(received) || received <= 0) {
+    changeEl.textContent = '—';
+    changeEl.className = 'change-amount';
+    return;
+  }
+
+  const change = Math.round(received - amountDue);
+  if (change < 0) {
+    changeEl.textContent = `ناقص ${formatCurrency(Math.abs(change))}`;
+    changeEl.className = 'change-amount is-short';
+  } else {
+    changeEl.textContent = formatCurrency(change);
+    changeEl.className = 'change-amount is-due';
+  }
 }
 
 async function checkoutSale() {
@@ -1506,46 +1569,58 @@ async function checkoutSale() {
   }
 
   try {
-    let earnedProfit = 0;
-
-    // Distribute discount proportionally across items if any
-    const totalGross = state.posCart.reduce((sum, i) => sum + (i.price * i.qty), 0);
-    const finalTotal = Math.max(0, totalGross - globalDiscount);
+    // Spread the global discount across the lines, then correct any rounding
+    // drift on the last line so the parts always add up to the invoice total.
+    const totalGross = Math.round(state.posCart.reduce((sum, i) => sum + (i.price * i.qty), 0));
+    const finalTotal = Math.max(0, totalGross - Math.round(globalDiscount));
     const receiptItems = state.posCart.map(i => ({
       name: i.product.model || i.product.name,
       qty: i.qty,
       price: i.price
     }));
 
-    // If credit with multiple items, distribute initial paid proportionally
-    for (let idx = 0; idx < state.posCart.length; idx++) {
-      const item = state.posCart[idx];
+    let allocatedDiscount = 0;
+    const payloadItems = state.posCart.map((item, idx) => {
       const itemGross = item.price * item.qty;
-      const itemDiscount = totalGross > 0 ? (itemGross / totalGross) * globalDiscount : 0;
-      const itemFinal = Math.max(0, itemGross - itemDiscount);
-      const itemInitialPaid = finalTotal > 0 ? (itemFinal / finalTotal) * initialPaid : 0;
-
-      const res = await fetch('/api/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product_id: item.product.id,
-          quantity: item.qty,
-          unit_price: item.price,
-          discount: itemDiscount,
-          customer_name: customerName || 'زبون عام',
-          customer_phone: customerPhone,
-          sold_by: soldBy,
-          payment_type: isCredit ? 'credit' : 'cash',
-          initial_paid: itemInitialPaid,
-          debt_notes: `فاتورة بيع آجل POS`
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        earnedProfit += data.profit;
+      let itemDiscount;
+      if (idx === state.posCart.length - 1) {
+        itemDiscount = Math.round(globalDiscount) - allocatedDiscount;
+      } else {
+        itemDiscount = Math.round(totalGross > 0 ? (itemGross / totalGross) * globalDiscount : 0);
+        allocatedDiscount += itemDiscount;
       }
+      return {
+        product_id: item.product.id,
+        quantity: item.qty,
+        unit_price: item.price,
+        discount: Math.max(0, itemDiscount)
+      };
+    });
+
+    // One atomic request: either the whole cart sells, or nothing does.
+    const res = await fetch('/api/sales/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: payloadItems,
+        customer_name: customerName || 'زبون عام',
+        customer_phone: customerPhone,
+        sold_by: soldBy,
+        payment_type: isCredit ? 'credit' : 'cash',
+        initial_paid: initialPaid,
+        debt_notes: 'فاتورة بيع آجل POS'
+      })
+    });
+
+    const data = await res.json();
+    if (!data.success) {
+      showToast(data.message || 'تعذر إتمام عملية البيع', 'error');
+      loadProducts();
+      loadStats();
+      return;
     }
+
+    const earnedProfit = data.profit;
 
     state.lastSaleReceipt = {
       customerName: customerName || (isCredit ? 'عميل آجل' : 'زبون عام'),
@@ -1570,6 +1645,7 @@ async function checkoutSale() {
     document.getElementById('cartCustomerName').value = '';
     document.getElementById('cartCustomerPhone').value = '';
     document.getElementById('cartInitialPaid').value = 0;
+    document.getElementById('cartAmountReceived').value = '';
     loadProducts();
     loadStats();
     loadDebts();
@@ -1805,7 +1881,7 @@ function closeDebtStatementModal() {
 function printDebtStatement() {
   if (!state.activeDebtForStatement) return;
   const { debt, payments } = state.activeDebtForStatement;
-  const storeName = state.settings.store_name || 'MY Store';
+  const storeName = state.settings.store_name || 'Sigma Store';
 
   const printWindow = window.open('', '_blank', 'width=650,height=800');
   let paymentsHtml = '';
@@ -1886,7 +1962,7 @@ function sendDebtWhatsAppReminder(debtId) {
   if (phone.startsWith('07')) phone = '964' + phone.substring(1);
   else if (!phone.startsWith('964')) phone = '964' + phone;
 
-  const storeName = state.settings.store_name || 'MY Store';
+  const storeName = state.settings.store_name || 'Sigma Store';
   const message = `مرحباً أخي ${debt.customer_name}،
 نود تذكيرك بوجود مبلغ متبقي بذمتك في محلات ${storeName} بقيمة (${formatCurrency(debt.remaining_amount)}) عن حساب [${debt.items_summary}].
 شاكرين لك حسن تعاملك معنا دائماً.`;
@@ -1967,7 +2043,11 @@ function renderRepairs() {
       </td>
       <td>
         <strong class="text-info">${rep.device_model}</strong><br>
-        <small class="text-muted">${rep.device_type} ${rep.passcode ? `| رمز: ${rep.passcode}` : ''}</small>
+        <small class="text-muted">
+          ${rep.device_type}
+          ${rep.passcode ? `| <span class="passcode-mask" title="اضغط لإظهار رمز القفل"
+              onclick="revealPasscode(this, '${escapeHtml(rep.passcode).replace(/'/g, "\\'")}')">رمز: ••••</span>` : ''}
+        </small>
       </td>
       <td>
         <span title="${rep.issue_description}">${rep.issue_description}</span>
@@ -1989,10 +2069,17 @@ function renderRepairs() {
           <option value="unrepaired" ${rep.status === 'unrepaired' ? 'selected' : ''}>❌ لم يتم التصليح</option>
         </select>
       </td>
-      <td><small>${new Date(rep.received_at).toLocaleDateString('ar-IQ')}</small></td>
+      <td>
+        <small>${new Date(rep.received_at).toLocaleDateString('ar-IQ')}</small>
+        ${renderPromisedDate(rep)}
+      </td>
       <td>
         <div class="d-flex gap-1">
           <button class="btn btn-sm btn-outline" onclick="printRepairTicket(${rep.id})" title="طباعة وصل استلام الصيانة"><i class="fa-solid fa-print"></i></button>
+          ${rep.customer_phone ? `
+            <button class="btn btn-sm btn-outline btn-whatsapp" onclick="sendRepairWhatsApp(${rep.id})" title="مراسلة الزبون على واتساب">
+              <i class="fa-brands fa-whatsapp"></i>
+            </button>` : ''}
           <button class="btn btn-sm btn-secondary" onclick="openEditRepairModal(${rep.id})" title="تعديل"><i class="fa-solid fa-pen"></i></button>
           <button class="btn btn-sm btn-ghost" onclick="deleteRepairTicket(${rep.id})" title="حذف"><i class="fa-solid fa-trash"></i></button>
         </div>
@@ -2000,6 +2087,60 @@ function renderRepairs() {
     `;
     tbody.appendChild(tr);
   });
+}
+
+// Shows the promised date under the received date, and flags it once it has passed
+// while the device is still not ready — that is the queue you chase first.
+function renderPromisedDate(rep) {
+  if (!rep.promised_at) return '';
+
+  const promised = new Date(rep.promised_at + 'T23:59:59');
+  const label = promised.toLocaleDateString('ar-IQ');
+  const stillOpen = rep.status === 'pending' || rep.status === 'in_progress';
+  const isLate = stillOpen && promised.getTime() < Date.now();
+
+  return `<br><small class="${isLate ? 'text-danger' : 'text-muted'}" title="موعد التسليم المتوعد به">
+    <i class="fa-solid fa-clock"></i> ${isLate ? 'تأخر: ' : 'الموعد: '}${label}
+  </small>`;
+}
+
+// One tap to tell the customer where their device stands, with a message that
+// already matches the current status.
+function sendRepairWhatsApp(repairId) {
+  const rep = state.repairs.find(r => r.id === repairId);
+  if (!rep || !rep.customer_phone) return;
+
+  let phone = String(rep.customer_phone).replace(/\D/g, '');
+  if (phone.startsWith('0')) phone = '964' + phone.slice(1);
+  else if (!phone.startsWith('964')) phone = '964' + phone;
+
+  const storeName = state.settings.store_name || 'Sigma Store';
+  const device = `${rep.device_type || 'الجهاز'} ${rep.device_model || ''}`.trim();
+
+  let body;
+  switch (rep.status) {
+    case 'ready':
+      body = `تم إنجاز صيانة ${device} بنجاح وهو جاهز للاستلام.\nالمبلغ المطلوب: ${formatCurrency(rep.total_charge)}`;
+      break;
+    case 'in_progress':
+      body = `جهازك ${device} قيد التصليح حالياً${rep.promised_at ? `، والموعد المتوقع للتسليم: ${new Date(rep.promised_at + 'T00:00:00').toLocaleDateString('ar-IQ')}` : ''}.`;
+      break;
+    case 'delivered':
+      body = `شكراً لثقتك بنا. تم تسليم ${device} بنجاح، ونتمنى لك خدمة موفقة.`;
+      break;
+    case 'unrepaired':
+      body = `نعتذر، لم نتمكن من إصلاح ${device}${rep.loss_reason ? ` (${rep.loss_reason})` : ''}. يمكنك مراجعتنا لاستلامه.`;
+      break;
+    default:
+      body = `جهازك ${device} قيد الفحص والتشخيص حالياً، وسنعلمك بالنتيجة قريباً.`;
+  }
+
+  const message =
+    `مرحباً ${rep.customer_name}،\n` +
+    `بخصوص تذكرة الصيانة رقم #${rep.ticket_number} في ${storeName}:\n\n` +
+    `${body}\n\nشاكرين لك حسن تعاملك معنا.`;
+
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
 }
 
 function handleRepairStatusChange() {
@@ -2041,6 +2182,7 @@ function openEditRepairModal(repairId) {
   document.getElementById('repFormDeviceType').value = rep.device_type;
   document.getElementById('repFormDeviceModel').value = rep.device_model;
   document.getElementById('repFormPasscode').value = rep.passcode || '';
+  document.getElementById('repFormPromisedAt').value = rep.promised_at || '';
   document.getElementById('repFormIssue').value = rep.issue_description;
   document.getElementById('repFormPartsCost').value = rep.parts_cost;
   document.getElementById('repFormTotalCharge').value = rep.total_charge;
@@ -2087,6 +2229,7 @@ async function saveRepair(event) {
     device_type: document.getElementById('repFormDeviceType').value,
     device_model: document.getElementById('repFormDeviceModel').value.trim(),
     passcode: document.getElementById('repFormPasscode').value.trim(),
+    promised_at: document.getElementById('repFormPromisedAt').value || null,
     issue_description: document.getElementById('repFormIssue').value.trim(),
     parts_cost: parseFloat(document.getElementById('repFormPartsCost').value) || 0,
     total_charge: parseFloat(document.getElementById('repFormTotalCharge').value) || 0,
@@ -2459,7 +2602,7 @@ function renderInvoicePreview(invoiceData) {
 
   const tbody = document.getElementById('previewInvoiceTableBody');
   tbody.innerHTML = '';
-  const fallbackImg = '/images/products/eq33.jpg';
+  const fallbackImg = '/images/products/EQ33.jpg';
 
   invoiceData.products.forEach((p, idx) => {
     const tr = document.createElement('tr');
@@ -2561,43 +2704,205 @@ async function loadInvoicesList() {
 // ==========================================================
 // 12. SETTINGS
 // ==========================================================
+function setFieldValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
 async function loadSettings() {
   try {
     const res = await fetch('/api/settings');
     const data = await res.json();
     if (data.success && data.settings) {
-      state.settings = { ...state.settings, ...data.settings };
-      document.getElementById('headerStoreName').textContent = state.settings.store_name || 'MY Store';
-      document.getElementById('settingStoreName').value = state.settings.store_name || 'MY Store';
-      document.getElementById('settingLowStock').value = state.settings.low_stock_threshold || 2;
+      const s = { ...state.settings, ...data.settings };
+      state.settings = s;
+
+      document.getElementById('headerStoreName').textContent = s.store_name || 'Sigma Store';
+      setFieldValue('settingStoreName', s.store_name || 'Sigma Store');
+      setFieldValue('settingPhone', s.phone || '');
+      setFieldValue('settingServices', s.store_services || '');
+      setFieldValue('settingLowStock', s.low_stock_threshold || 2);
+      setFieldValue('settingUsdRate', s.usd_rate || 1500);
+      setFieldValue('settingRetailMargin', s.default_retail_margin || 25);
+      setFieldValue('settingTgChatIds', s.telegram_chat_ids || '');
+
+      // The token itself is never echoed back into the page, only whether it is set
+      const tokenStatus = document.getElementById('tgTokenStatus');
+      if (tokenStatus) {
+        const isSet = !!(s.telegram_bot_token && String(s.telegram_bot_token).trim());
+        tokenStatus.textContent = isSet ? 'مُعيّن ✓' : 'غير مُعيّن';
+        tokenStatus.className = isSet ? 'badge badge-success' : 'badge badge-warning';
+      }
     }
   } catch (error) {
     console.error('Error loading settings:', error);
   }
 }
 
-async function saveSettings() {
-  const payload = {
-    settings: {
-      store_name: document.getElementById('settingStoreName').value.trim() || 'MY Store',
-      low_stock_threshold: document.getElementById('settingLowStock').value
-    }
-  };
-
+async function postSettings(settings, successMessage) {
   try {
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ settings })
     });
-
     const data = await res.json();
     if (data.success) {
-      showToast('تم حفظ الإعدادات بنجاح', 'success');
+      showToast(successMessage, 'success');
       loadSettings();
+      return true;
     }
+    showToast(data.message || 'فشل في حفظ الإعدادات', 'error');
   } catch (error) {
     showToast('فشل في حفظ الإعدادات', 'error');
+  }
+  return false;
+}
+
+async function saveSettings() {
+  const phone = document.getElementById('settingPhone').value.trim();
+  const lowStock = parseInt(document.getElementById('settingLowStock').value, 10);
+  const usdRate = parseFloat(document.getElementById('settingUsdRate').value);
+  const margin = parseFloat(document.getElementById('settingRetailMargin').value);
+
+  if (!Number.isFinite(lowStock) || lowStock < 0) {
+    showToast('حد تنبيه المخزون يجب أن يكون رقماً صحيحاً موجباً', 'error');
+    return;
+  }
+  if (!Number.isFinite(usdRate) || usdRate <= 0) {
+    showToast('سعر صرف الدولار يجب أن يكون رقماً أكبر من صفر', 'error');
+    return;
+  }
+
+  await postSettings({
+    store_name: document.getElementById('settingStoreName').value.trim() || 'Sigma Store',
+    phone,
+    store_services: document.getElementById('settingServices').value.trim(),
+    low_stock_threshold: lowStock,
+    usd_rate: usdRate,
+    default_retail_margin: Number.isFinite(margin) ? margin : 25
+  }, 'تم حفظ الإعدادات بنجاح');
+}
+
+async function saveTelegramSettings() {
+  const tokenInput = document.getElementById('settingTgToken');
+  const token = tokenInput.value.trim();
+  const chatIds = document.getElementById('settingTgChatIds').value.trim();
+
+  const settings = { telegram_chat_ids: chatIds };
+  // An empty box means "keep what is stored", so the secret is never overwritten
+  // just because the field was not re-typed.
+  if (token) settings.telegram_bot_token = token;
+
+  if (await postSettings(settings, 'تم حفظ إعدادات الإشعارات بنجاح')) {
+    tokenInput.value = '';
+  }
+}
+
+async function changeAdminPassword() {
+  const newPassword = document.getElementById('settingNewPassword').value;
+  const confirmPassword = document.getElementById('settingConfirmPassword').value;
+
+  if (!newPassword || newPassword.length < 6) {
+    showToast('كلمة المرور يجب أن تكون 6 أحرف على الأقل', 'error');
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    showToast('كلمتا المرور غير متطابقتين', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('تم تغيير كلمة المرور بنجاح. سيُطلب إدخالها عند الدخول من أجهزة أخرى.', 'success');
+      document.getElementById('settingNewPassword').value = '';
+      document.getElementById('settingConfirmPassword').value = '';
+    } else {
+      showToast(data.message || 'تعذر تغيير كلمة المرور', 'error');
+    }
+  } catch (error) {
+    showToast('تعذر الاتصال بالخادم', 'error');
+  }
+}
+
+async function triggerManualBackup() {
+  try {
+    const res = await fetch('/api/backups/trigger', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('تم أخذ نسخة احتياطية آمنة فورية', 'success');
+      loadSecureBackups();
+    } else {
+      showToast(data.message || 'تعذر أخذ النسخة الاحتياطية', 'error');
+    }
+  } catch (error) {
+    showToast('تعذر الاتصال بالخادم', 'error');
+  }
+}
+
+// Unlock codes stay masked in the list so a glance at the screen does not expose
+// every customer's passcode. Click reveals one for a few seconds.
+function revealPasscode(el, code) {
+  if (el.dataset.revealed === '1') return;
+  el.dataset.revealed = '1';
+  el.textContent = `رمز: ${code}`;
+  el.classList.add('revealed');
+  setTimeout(() => {
+    el.textContent = 'رمز: ••••';
+    el.classList.remove('revealed');
+    el.dataset.revealed = '0';
+  }, 6000);
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '0 KB';
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function loadSecureBackups() {
+  const box = document.getElementById('secureBackupsBox');
+  if (!box) return;
+  box.innerHTML = '<div class="text-muted p-2"><i class="fa-solid fa-spinner fa-spin"></i> جاري التحميل...</div>';
+
+  try {
+    const res = await fetch('/api/backups/secure-list');
+    const data = await res.json();
+    if (!data.success) {
+      box.innerHTML = '<div class="text-danger p-2">تعذر قراءة قائمة النسخ</div>';
+      return;
+    }
+
+    if (!data.backups || data.backups.length === 0) {
+      box.innerHTML = '<div class="text-muted p-2">لا توجد نسخ محفوظة بعد في هذا الموقع.</div>';
+      return;
+    }
+
+    const rows = data.backups.slice(0, 12).map(b => `
+      <div class="backup-row">
+        <span><i class="fa-solid fa-file-shield text-info"></i> ${escapeHtml(b.filename)}</span>
+        <span class="text-muted">${formatBytes(b.sizeBytes)}</span>
+        <span class="text-muted">${new Date(b.createdAt).toLocaleString('ar-IQ')}</span>
+      </div>
+    `).join('');
+
+    box.innerHTML = `
+      <div class="backup-location">
+        <i class="fa-solid fa-folder-open text-warning"></i>
+        الموقع: <code>${escapeHtml(data.secureLocation)}</code>
+        — إجمالي النسخ: <strong>${formatNumber(data.totalBackups)}</strong>
+      </div>
+      ${rows}
+      ${data.totalBackups > 12 ? `<div class="text-muted p-2">... و${formatNumber(data.totalBackups - 12)} نسخة أقدم</div>` : ''}
+    `;
+  } catch (error) {
+    box.innerHTML = '<div class="text-danger p-2">تعذر الاتصال بالخادم</div>';
   }
 }
 
@@ -2611,7 +2916,7 @@ function printRepairTicket(repairId) {
   const rep = state.repairs.find(r => r.id === repairId);
   if (!rep) return;
 
-  const storeName = state.settings.store_name || 'MY Store';
+  const storeName = state.settings.store_name || 'Sigma Store';
   const printWin = window.open('', '_blank', 'width=650,height=750');
   if (!printWin) {
     showToast('يرجى السماح بالنوافذ المنبثقة للطباعة', 'error');
@@ -2652,7 +2957,10 @@ function printRepairTicket(repairId) {
         <div class="row"><strong>اسم الزبون:</strong> <span>${rep.customer_name}</span></div>
         <div class="row"><strong>رقم الهاتف:</strong> <span>${rep.customer_phone || '-'}</span></div>
         <div class="row"><strong>نوع وموديل الجهاز:</strong> <span>${rep.device_type} - ${rep.device_model}</span></div>
-        <div class="row"><strong>رمز القفل (Passcode):</strong> <span>${rep.passcode || 'لا يوجد'}</span></div>
+        <!-- The unlock code is deliberately NOT printed. This slip leaves with the
+             customer, and a paper carrying both the device and its passcode is a
+             real risk if it is lost. It stays visible inside the app only. -->
+        ${rep.promised_at ? `<div class="row"><strong>موعد التسليم المتوقع:</strong> <span>${new Date(rep.promised_at + 'T00:00:00').toLocaleDateString('ar-IQ')}</span></div>` : ''}
         <div class="divider"></div>
         <div class="row"><strong>وصف العطل / المشكلة:</strong> <span>${rep.issue_description}</span></div>
         <div class="row"><strong>الفني المسؤول:</strong> <span>${rep.technician || 'فني الصيانة'}</span></div>
@@ -2678,7 +2986,7 @@ function printRepairTicket(repairId) {
 }
 
 function printPosReceipt(saleData) {
-  const storeName = state.settings.store_name || 'MY Store';
+  const storeName = state.settings.store_name || 'Sigma Store';
   const printWin = window.open('', '_blank', 'width=450,height=600');
   if (!printWin) return;
   
@@ -2785,19 +3093,19 @@ async function loadOnlineOrders() {
     state.onlineOrders.forEach(o => {
       let itemsListHtml = '';
       (o.items || []).forEach(it => {
-        itemsListHtml += `<div style="margin-bottom:2px;">• <b>${it.qty}x</b> [${it.model || ''}] ${it.name} (${formatCurrency(it.price)})</div>`;
+        itemsListHtml += `<div style="margin-bottom:2px;">• <b>${escapeHtml(it.qty)}x</b> [${escapeHtml(it.model || '')}] ${escapeHtml(it.name)} (${formatCurrency(it.price)})</div>`;
       });
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><strong class="text-info">${o.order_number}</strong></td>
+        <td><strong class="text-info">${escapeHtml(o.order_number)}</strong></td>
         <td>
-          <strong>${o.customer_name}</strong><br>
-          <small class="text-muted"><i class="fa-solid fa-phone"></i> ${o.customer_phone}</small>
+          <strong>${escapeHtml(o.customer_name)}</strong><br>
+          <small class="text-muted"><i class="fa-solid fa-phone"></i> ${escapeHtml(o.customer_phone)}</small>
         </td>
         <td>
-          <strong>${o.city}</strong><br>
-          <small class="text-muted">${o.address}</small>
+          <strong>${escapeHtml(o.city)}</strong><br>
+          <small class="text-muted">${escapeHtml(o.address)}</small>
         </td>
         <td><div style="font-size:12px; line-height:1.4;">${itemsListHtml}</div></td>
         <td><strong class="text-success" style="font-size:15px;">${formatCurrency(o.total_amount)}</strong></td>
