@@ -30,10 +30,10 @@
       "model": "ME01",
       "category": "سماعات",
       "brand": "Marshall",
-      "selling_price": 13750,
+      "selling_price": 13000,
       "stock_quantity": 4,
       "image_url": "/uploads/image-1788547463361-211010805.jpg",
-      "updated_at": "2026-09-19 06:37:28"
+      "updated_at": "2026-09-19 06:46:13"
     },
     {
       "id": 27,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:46:00.680Z"
+  "updated_at": "2026-09-19T06:46:16.359Z"
 }
