@@ -107,10 +107,10 @@
       "model": "U95 PD",
       "category": "كابلات",
       "brand": "Hoco",
-      "selling_price": 5250,
+      "selling_price": 5000,
       "stock_quantity": 5,
       "image_url": "/uploads/image-1789747740951-675257504.jpg",
-      "updated_at": "2026-09-18 16:09:00"
+      "updated_at": "2026-09-19 06:47:08"
     },
     {
       "id": 19,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:46:16.359Z"
+  "updated_at": "2026-09-19T06:47:11.270Z"
 }
