@@ -140,10 +140,10 @@
       "model": "X96 - 25CM",
       "category": "كابلات",
       "brand": "Hoco",
-      "selling_price": 1750,
+      "selling_price": 1500,
       "stock_quantity": 5,
       "image_url": "/uploads/image-1789747849692-607863554.jpg",
-      "updated_at": "2026-09-18 16:10:49"
+      "updated_at": "2026-09-19 06:47:21"
     },
     {
       "id": 16,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:47:11.270Z"
+  "updated_at": "2026-09-19T06:47:24.874Z"
 }
