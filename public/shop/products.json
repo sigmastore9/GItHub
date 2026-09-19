@@ -85,10 +85,10 @@
       "model": "X122",
       "category": "كابلات",
       "brand": "Hoco",
-      "selling_price": 1500,
-      "stock_quantity": 20,
+      "selling_price": 2000,
+      "stock_quantity": 19,
       "image_url": "/uploads/image-1788547556982-403264167.jpg",
-      "updated_at": "2026-09-04 18:45:57"
+      "updated_at": "2026-09-19 06:43:46"
     },
     {
       "id": 22,
@@ -337,5 +337,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:40:29.878Z"
+  "updated_at": "2026-09-19T06:43:49.146Z"
 }
