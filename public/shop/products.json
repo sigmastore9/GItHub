@@ -217,10 +217,10 @@
       "model": "HB1A",
       "category": "محولات وتوصيلات",
       "brand": "Hoco",
-      "selling_price": 6500,
+      "selling_price": 7000,
       "stock_quantity": 5,
       "image_url": "/uploads/image-1789747970062-76526791.jpg",
-      "updated_at": "2026-09-18 16:12:50"
+      "updated_at": "2026-09-19 06:49:05"
     },
     {
       "id": 9,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:48:51.546Z"
+  "updated_at": "2026-09-19T06:49:08.270Z"
 }
