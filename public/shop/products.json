@@ -63,10 +63,10 @@
       "model": "لاصق جام دايموند",
       "category": "حماية ولواصق شاشة",
       "brand": "Diamond",
-      "selling_price": 750,
+      "selling_price": 2000,
       "stock_quantity": 80,
       "image_url": "/uploads/brand-img-1788596354388-451.jpg",
-      "updated_at": "2026-09-05 08:19:14"
+      "updated_at": "2026-09-19 06:49:47"
     },
     {
       "id": 24,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:49:35.818Z"
+  "updated_at": "2026-09-19T06:49:50.428Z"
 }
