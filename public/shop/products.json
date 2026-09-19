@@ -184,10 +184,10 @@
       "model": "UD6 8G",
       "category": "تخزين وفلاشات",
       "brand": "Hoco",
-      "selling_price": 7500,
+      "selling_price": 7000,
       "stock_quantity": 5,
       "image_url": "/uploads/brand-img-1788597221475-132.jpg",
-      "updated_at": "2026-09-05 08:33:45"
+      "updated_at": "2026-09-19 06:49:32"
     },
     {
       "id": 12,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:49:24.516Z"
+  "updated_at": "2026-09-19T06:49:35.818Z"
 }
