@@ -195,10 +195,10 @@
       "model": "UA17 TC",
       "category": "محولات وتوصيلات",
       "brand": "Hoco",
-      "selling_price": 2250,
+      "selling_price": 2000,
       "stock_quantity": 5,
       "image_url": "/uploads/image-1789747930597-543157927.jpg",
-      "updated_at": "2026-09-18 16:12:10"
+      "updated_at": "2026-09-19 06:49:21"
     },
     {
       "id": 11,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:49:16.887Z"
+  "updated_at": "2026-09-19T06:49:24.516Z"
 }
