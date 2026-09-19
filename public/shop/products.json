@@ -8,10 +8,10 @@
       "model": "X118",
       "category": "كابلات",
       "brand": "Hoco",
-      "selling_price": 3250,
+      "selling_price": 4000,
       "stock_quantity": 10,
       "image_url": "/uploads/image-1788455574553-65504827.jpg",
-      "updated_at": "2026-09-19 06:06:10"
+      "updated_at": "2026-09-19 06:45:42"
     },
     {
       "id": 29,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:44:31.355Z"
+  "updated_at": "2026-09-19T06:45:45.977Z"
 }
