@@ -1,6 +1,6 @@
 {
   "success": true,
-  "count": 30,
+  "count": 29,
   "products": [
     {
       "id": 30,
@@ -89,17 +89,6 @@
       "stock_quantity": 19,
       "image_url": "/uploads/image-1788547556982-403264167.jpg",
       "updated_at": "2026-09-19 06:43:46"
-    },
-    {
-      "id": 22,
-      "name": "كيبل هوكو X112 آيفون Lightning سريع الشحن",
-      "model": "X112 IP",
-      "category": "كابلات",
-      "brand": "Hoco",
-      "selling_price": 4000,
-      "stock_quantity": 10,
-      "image_url": "/uploads/image-1789747713627-70231422.jpg",
-      "updated_at": "2026-09-19 06:44:01"
     },
     {
       "id": 21,
@@ -337,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:44:04.136Z"
+  "updated_at": "2026-09-19T06:44:31.355Z"
 }
