@@ -294,10 +294,10 @@
       "model": "EQ33",
       "category": "سماعات",
       "brand": "Hoco",
-      "selling_price": 11750,
+      "selling_price": 12000,
       "stock_quantity": 5,
       "image_url": "/uploads/image-1788456176807-193648697.jpg",
-      "updated_at": "2026-09-03 17:22:56"
+      "updated_at": "2026-09-19 06:40:12"
     },
     {
       "id": 3,
@@ -337,5 +337,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:38:26.612Z"
+  "updated_at": "2026-09-19T06:40:15.134Z"
 }
