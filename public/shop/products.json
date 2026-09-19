@@ -239,10 +239,10 @@
       "model": "CS32B",
       "category": "شواحن",
       "brand": "Hoco",
-      "selling_price": 5750,
+      "selling_price": 6000,
       "stock_quantity": 5,
       "image_url": "/uploads/image-1788454487666-795647777.jpg",
-      "updated_at": "2026-09-03 16:54:47"
+      "updated_at": "2026-09-19 06:48:48"
     },
     {
       "id": 7,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:48:32.522Z"
+  "updated_at": "2026-09-19T06:48:51.546Z"
 }
