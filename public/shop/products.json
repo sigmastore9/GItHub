@@ -228,10 +228,10 @@
       "model": "Z58",
       "category": "شواحن",
       "brand": "Hoco",
-      "selling_price": 4750,
+      "selling_price": 5000,
       "stock_quantity": 3,
       "image_url": "/uploads/image-1789748003438-581072852.jpg",
-      "updated_at": "2026-09-18 16:13:23"
+      "updated_at": "2026-09-19 06:48:13"
     },
     {
       "id": 8,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-19T06:47:59.701Z"
+  "updated_at": "2026-09-19T06:48:16.746Z"
 }
