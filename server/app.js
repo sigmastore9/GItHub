@@ -371,6 +371,14 @@ function generateUniqueRef(prefix, table, column) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
+const ALLOWED_REPAIR_STATUSES = ['pending', 'in_progress', 'ready', 'delivered', 'unrepaired'];
+
+// An unrepaired device earns nothing and costs whatever the attempt cost, so its
+// profit is the recorded loss. Everything else is the agreed charge minus parts.
+function repairProfit(status, charge, parts, loss) {
+  return status === 'unrepaired' ? -loss : (charge - parts);
+}
+
 const generateRepairTicket = () => generateUniqueRef('REP', 'repairs', 'ticket_number');
 const generateSoftwareTicket = () => generateUniqueRef('SFT', 'software_services', 'ticket_number');
 const generateOrderNumber = () => generateUniqueRef('ORD', 'orders', 'order_number');
@@ -1190,12 +1198,21 @@ app.post('/api/repairs', (req, res) => {
       total_charge,
       technician,
       notes,
-      promised_at
+      promised_at,
+      status,
+      loss_cost,
+      loss_reason
     } = req.body;
 
     const parts = parseFloat(parts_cost) || 0;
     const charge = parseFloat(total_charge) || 0;
-    const profit = charge - parts;
+    const loss = parseFloat(loss_cost) || 0;
+
+    // The status and the loss fields used to be hardcoded to 'pending', 0 and ''
+    // here, so a ticket opened directly as "unrepaired" with a recorded loss came
+    // back as a plain pending ticket with none of it kept.
+    const ticketStatus = ALLOWED_REPAIR_STATUSES.includes(status) ? status : 'pending';
+    const profit = repairProfit(ticketStatus, charge, parts, loss);
     const ticketNumber = generateRepairTicket();
 
     const stmt = db.prepare(`
@@ -1203,7 +1220,7 @@ app.post('/api/repairs', (req, res) => {
         ticket_number, customer_name, customer_phone, device_type,
         device_model, passcode, issue_description, parts_cost,
         total_charge, profit, loss_cost, loss_reason, status, technician, notes, promised_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, '', 'pending', ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
@@ -1217,6 +1234,9 @@ app.post('/api/repairs', (req, res) => {
       parts,
       charge,
       profit,
+      loss,
+      loss_reason || '',
+      ticketStatus,
       technician || 'فني الصيانة',
       notes || '',
       promised_at || null
@@ -1264,12 +1284,11 @@ app.put('/api/repairs/:id', (req, res) => {
     const loss = loss_cost !== undefined ? parseFloat(loss_cost) : (existing.loss_cost || 0);
     const currentStatus = status || existing.status;
 
-    let profit = 0;
-    if (currentStatus === 'unrepaired') {
-      profit = -loss; // Negative profit = direct loss
-    } else {
-      profit = charge - parts;
+    if (status !== undefined && !ALLOWED_REPAIR_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, message: 'حالة التذكرة غير معروفة' });
     }
+
+    const profit = repairProfit(currentStatus, charge, parts, loss);
 
     let completedAt = existing.completed_at;
     let deliveredAt = existing.delivered_at;
@@ -1300,7 +1319,13 @@ app.put('/api/repairs/:id', (req, res) => {
       passcode !== undefined ? passcode : existing.passcode,
       issue_description !== undefined ? issue_description : existing.issue_description,
       parts,
-      currentStatus === 'unrepaired' ? 0 : charge,
+      // Keep the agreed amount on record even while the ticket sits as
+      // "unrepaired". Writing a 0 here destroyed it permanently: flipping the
+      // status to unrepaired and back left the charge at 0 with no way to recover
+      // it, and turned the parts cost into a phantom loss. Revenue is already
+      // filtered by status in the statistics, and the table renders 0 for an
+      // unrepaired ticket, so nothing needs the column to be blanked.
+      charge,
       profit,
       loss,
       loss_reason !== undefined ? loss_reason : (existing.loss_reason || ''),
