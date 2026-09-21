@@ -294,10 +294,10 @@
       "model": "DM6",
       "category": "سماعات",
       "brand": "Hoco",
-      "selling_price": 2250,
+      "selling_price": 3000,
       "stock_quantity": 10,
       "image_url": "/uploads/image-1789748095241-849435246.png",
-      "updated_at": "2026-09-18 16:14:55"
+      "updated_at": "2026-09-21 18:57:27"
     },
     {
       "id": 2,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-21T18:56:57.736Z"
+  "updated_at": "2026-09-21T18:57:30.123Z"
 }
