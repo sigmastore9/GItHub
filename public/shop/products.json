@@ -64,9 +64,9 @@
       "category": "حماية ولواصق شاشة",
       "brand": "Diamond",
       "selling_price": 2000,
-      "stock_quantity": 77,
+      "stock_quantity": 76,
       "image_url": "/uploads/brand-img-1788596354388-451.jpg",
-      "updated_at": "2026-09-19 06:49:54"
+      "updated_at": "2026-09-22 07:00:49"
     },
     {
       "id": 24,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-22T07:00:14.511Z"
+  "updated_at": "2026-09-22T07:00:52.571Z"
 }
