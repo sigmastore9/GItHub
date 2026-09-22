@@ -10,7 +10,10 @@ const shopState = {
   sortBy: 'default',
   cart: [],
   activeQvProduct: null,
-  qvQty: 1
+  qvQty: 1,
+  // The store's configured phone numbers, resolved once in loadStoreSettings()
+  // and reused when an order finishes to build both WhatsApp buttons.
+  storeNumbers: ['07830860919', '07835046817']
 };
 
 // Initialize
@@ -72,6 +75,7 @@ async function loadStoreSettings() {
         // invalid number (0783086091907835046817) for the WhatsApp button below.
         // Split first, then clean each number on its own.
         const numbers = parsePhoneNumbers(s.phone);
+        if (numbers.length) shopState.storeNumbers = numbers;
 
         const ph = document.getElementById('footerPhone');
         if (ph && numbers.length) {
@@ -95,9 +99,13 @@ async function loadStoreSettings() {
         });
         if (waSep) waSep.style.display = numbers.length > 1 ? '' : 'none';
 
-        // Default contact button (order-success modal) always uses the first number
-        const wa = document.getElementById('btnWhatsAppContact');
-        if (wa && numbers[0]) wa.href = `https://wa.me/${getIraqiPhoneInternational(numbers[0])}`;
+        // Order-success buttons only get their final message once an order is
+        // actually placed (see submitCustomerOrder); here we just show which
+        // number each button is, in case the modal renders before that.
+        [1, 2].forEach(i => {
+          const label = document.getElementById(`waOrderLabel${i}`);
+          if (label && numbers[i - 1]) label.textContent = numbers[i - 1];
+        });
       }
     }
   } catch (e) {}
@@ -1002,13 +1010,27 @@ async function submitCustomerOrder(event) {
     document.getElementById('successOrderRef').textContent = `#${orderNumber}`;
     document.getElementById('successOrderTotal').textContent = `المبلغ الكلي: ${formatIQD(totalAmount)}`;
     
-    // WhatsApp message link
+    // WhatsApp message links — one button per store number. Each is a plain
+    // wa.me link, which a phone's OS hands directly to the installed WhatsApp
+    // app (never a browser/website); the customer picks whichever number they
+    // want to confirm the order on, and it opens straight into that chat.
     const storeName = document.querySelector('.brand-title')?.textContent || 'SIGMA STORE';
     const msg = encodeURIComponent(`مرحباً ${storeName}، قمت بتأكيد طلب جديد رقم #${orderNumber} باسم (${customer_name}) في ذي قار (${district}) بقيمة (${formatIQD(totalAmount)}).`);
-    const defaultWa = document.getElementById('btnWhatsAppContact')?.getAttribute('href') || 'https://wa.me/9647830860919';
-    const cleanWaBase = defaultWa.split('?')[0];
-    const btnWa = document.getElementById('btnWhatsAppContact');
-    if (btnWa) btnWa.href = `${cleanWaBase}?text=${msg}`;
+
+    shopState.storeNumbers.slice(0, 2).forEach((number, idx) => {
+      const i = idx + 1;
+      const btn = document.getElementById(`waOrderBtn${i}`);
+      const label = document.getElementById(`waOrderLabel${i}`);
+      if (!btn) return;
+      btn.href = `https://wa.me/${getIraqiPhoneInternational(number)}?text=${msg}`;
+      btn.style.display = '';
+      if (label) label.textContent = number;
+    });
+    // Hide the second button if only one number is configured
+    if (shopState.storeNumbers.length < 2) {
+      const btn2 = document.getElementById('waOrderBtn2');
+      if (btn2) btn2.style.display = 'none';
+    }
 
     document.getElementById('orderSuccessModal').style.display = 'flex';
   } catch (error) {

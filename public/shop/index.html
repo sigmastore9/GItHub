@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <!-- Storefront CSS -->
-  <link rel="stylesheet" href="css/shop.css?v=2.4.0">
+  <link rel="stylesheet" href="css/shop.css?v=2.5.0">
 </head>
 <body>
 
@@ -355,12 +355,23 @@
         <div class="ref-total" id="successOrderTotal">0 د.ع</div>
       </div>
 
-      <div class="mt-4 d-flex justify-center gap-2">
+      <div class="mt-4 d-flex justify-center">
         <button class="btn-primary-shop" onclick="closeSuccessModal()">
           <i class="fa-solid fa-bag-shopping"></i> متابعة التسوق
         </button>
-        <a href="#" id="btnWhatsAppContact" target="_blank" class="btn-whatsapp-shop">
-          <i class="fa-brands fa-whatsapp"></i> تواصل عبر واتساب
+      </div>
+
+      <!-- Each button opens the WhatsApp app itself to that number's chat (a wa.me
+           link is a universal link the phone's OS hands to the installed WhatsApp
+           app directly) — never a website. The customer picks whichever number
+           they prefer to confirm their order on. -->
+      <p class="text-muted mt-3" style="font-size:12px;">أو أكّد طلبك مباشرة عبر واتساب:</p>
+      <div class="d-flex justify-center gap-2 flex-wrap">
+        <a href="#" id="waOrderBtn1" target="_blank" class="btn-whatsapp-shop" style="display:none;">
+          <i class="fa-brands fa-whatsapp"></i> <span id="waOrderLabel1"></span>
+        </a>
+        <a href="#" id="waOrderBtn2" target="_blank" class="btn-whatsapp-shop" style="display:none;">
+          <i class="fa-brands fa-whatsapp"></i> <span id="waOrderLabel2"></span>
         </a>
       </div>
     </div>
@@ -474,6 +485,6 @@
   <div id="shopToastContainer" class="shop-toast-container"></div>
 
   <!-- Storefront Scripts -->
-  <script src="js/shop.js?v=2.4.0"></script>
+  <script src="js/shop.js?v=2.5.0"></script>
 </body>
 </html>
