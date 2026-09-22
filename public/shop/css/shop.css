@@ -1015,7 +1015,7 @@ body {
 }
 .footer-inner {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.5fr;
+  grid-template-columns: 2fr 1fr 1.5fr;
   gap: 24px;
   padding-bottom: 24px;
 }
@@ -1039,7 +1039,32 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
+
+/* Location link opens the map; phone numbers are click-to-call */
+.footer-map-link,
+.footer-copy-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.4);
+  transition: color 0.2s ease;
+}
+.footer-map-link:hover,
+.footer-copy-link:hover {
+  color: var(--primary, #38bdf8);
+  border-bottom-color: currentColor;
+}
+
+/* Two WhatsApp numbers, each opening a chat directly */
+.footer-whatsapp-row { align-items: center; }
+.footer-whatsapp-link {
+  color: #22c55e;
+  font-weight: 700;
+  text-decoration: none;
+}
+.footer-whatsapp-link:hover { text-decoration: underline; }
+.footer-whatsapp-sep { color: var(--text-muted); }
 .footer-bottom {
   border-top: 1px solid rgba(255, 255, 255, 0.04);
   padding: 14px 0;

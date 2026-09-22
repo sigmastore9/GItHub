@@ -67,13 +67,50 @@ async function loadStoreSettings() {
         document.title = `${s.store_name} - الإلكترونيات والملحقات الأصلية`;
       }
       if (s.phone) {
+        // The phone setting can hold several numbers ("07830860919 - 07835046817").
+        // Stripping every non-digit from the whole string glued them into one
+        // invalid number (0783086091907835046817) for the WhatsApp button below.
+        // Split first, then clean each number on its own.
+        const numbers = parsePhoneNumbers(s.phone);
+
         const ph = document.getElementById('footerPhone');
-        if (ph) ph.innerHTML = `<i class="fa-solid fa-phone text-blue"></i> خدمة الزبائن: ${s.phone}`;
+        if (ph && numbers.length) {
+          const links = numbers
+            .map(n => `<a href="tel:+${getIraqiPhoneInternational(n)}" class="footer-copy-link" title="اضغط للاتصال">${n}</a>`)
+            .join(' - ');
+          ph.innerHTML = `<i class="fa-solid fa-phone text-blue"></i> خدمة الزبائن: ${links}`;
+        }
+
+        // Footer WhatsApp row: one link per configured number, up to how many slots exist
+        const waLinks = document.querySelectorAll('.footer-whatsapp-link');
+        const waSep = document.querySelector('.footer-whatsapp-sep');
+        waLinks.forEach((el, i) => {
+          if (numbers[i]) {
+            el.href = `https://wa.me/${getIraqiPhoneInternational(numbers[i])}`;
+            el.textContent = numbers[i];
+            el.style.display = '';
+          } else {
+            el.style.display = 'none';
+          }
+        });
+        if (waSep) waSep.style.display = numbers.length > 1 ? '' : 'none';
+
+        // Default contact button (order-success modal) always uses the first number
         const wa = document.getElementById('btnWhatsAppContact');
-        if (wa) wa.href = `https://wa.me/${s.phone.replace(/[^0-9]/g, '')}`;
+        if (wa && numbers[0]) wa.href = `https://wa.me/${getIraqiPhoneInternational(numbers[0])}`;
       }
     }
   } catch (e) {}
+}
+
+// Splits a settings string like "07830860919 - 07835046817" into clean numbers.
+// Also tolerates a comma or slash between numbers.
+function parsePhoneNumbers(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(/[-,/]+/)
+    .map(part => cleanIraqiPhone(part.trim()))
+    .filter(Boolean);
 }
 
 // Folds the spellings Arabic shoppers mix freely, so "سماعه" finds "سماعة".
@@ -903,9 +940,19 @@ async function submitCustomerOrder(event) {
     };
 
     // 1. Try local server endpoint if available.
-    // A rejection from the server (out of stock, bad data) must stop the order.
-    // A network failure only means we are on static hosting with no backend,
-    // where the WhatsApp/Telegram route is the real order channel — so continue.
+    // A rejection from OUR server (out of stock, bad data) must stop the order.
+    // No backend at all (GitHub Pages static hosting) must NOT stop it — the
+    // WhatsApp/Telegram route is the real order channel there.
+    //
+    // The bug this replaces: on static hosting, POSTing to /api/shop/orders
+    // doesn't throw — the static host answers with its own HTML error page
+    // (GitHub Pages returns 405 for any non-GET request), so `res.ok` was false
+    // and the code below treated that identically to a genuine server rejection:
+    // it showed "تعذر إتمام الطلب" and stopped, before the WhatsApp fallback ever
+    // ran. Every order placed on the published site failed silently this way.
+    // The fix: only trust the response as a real rejection when it is actually
+    // JSON from our own Express server (it always answers with res.json()); a
+    // static host's error page is HTML and is treated like no backend at all.
     try {
       const res = await fetch('/api/shop/orders', {
         method: 'POST',
@@ -913,22 +960,27 @@ async function submitCustomerOrder(event) {
         body: JSON.stringify(payload)
       });
 
-      let data = null;
-      try { data = await res.json(); } catch (_) {}
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('not-a-real-backend');
+      }
 
-      if (!res.ok || (data && data.success === false)) {
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-check"></i> تأكيد وإرسال الطلب';
-        showShopToast((data && data.message) || 'تعذر إتمام الطلب، يرجى المحاولة مرة أخرى', 'error');
+        showShopToast(data.message || 'تعذر إتمام الطلب، يرجى المحاولة مرة أخرى', 'error');
         loadShopProducts(true);
         return;
       }
 
-      if (data && data.orderNumber) {
+      if (data.orderNumber) {
         orderNumber = data.orderNumber;
       }
     } catch (_) {
-      // No backend reachable (static hosting): fall through to the notification path
+      // No real backend reachable (static hosting, or a genuine network error):
+      // fall through to the WhatsApp/Telegram notification path below.
     }
 
     // 2. The server sends the Telegram alert when it saves the order, so the bot
