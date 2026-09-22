@@ -343,6 +343,8 @@
   <!-- Order Success Confirmation Modal -->
   <div id="orderSuccessModal" class="shop-modal-overlay" style="display:none;">
     <div class="shop-modal-card text-center" style="max-width: 520px;">
+      <button class="modal-close-btn" onclick="closeSuccessModal()">&times;</button>
+
       <div class="success-icon-wrap">
         <i class="fa-solid fa-circle-check text-green fa-4x"></i>
       </div>
@@ -355,17 +357,13 @@
         <div class="ref-total" id="successOrderTotal">0 د.ع</div>
       </div>
 
-      <div class="mt-4 d-flex justify-center">
-        <button class="btn-primary-shop" onclick="closeSuccessModal()">
-          <i class="fa-solid fa-bag-shopping"></i> متابعة التسوق
-        </button>
-      </div>
-
       <!-- Each button opens the WhatsApp app itself to that number's chat (a wa.me
            link is a universal link the phone's OS hands to the installed WhatsApp
            app directly) — never a website. The customer picks whichever number
-           they prefer to confirm their order on. -->
-      <p class="text-muted mt-3" style="font-size:12px;">أو أكّد طلبك مباشرة عبر واتساب:</p>
+           they prefer to confirm their order on. This is now the primary action
+           on this screen; "Continue Shopping" was removed, and dismissing the
+           modal instead uses the × in the corner, matching the other modals. -->
+      <p class="text-muted mt-4" style="font-size:13px;">أكّد الطلب عبر التواصل مع أحد الأرقام التالية على واتساب:</p>
       <div class="d-flex justify-center gap-2 flex-wrap">
         <a href="#" id="waOrderBtn1" target="_blank" class="btn-whatsapp-shop" style="display:none;">
           <i class="fa-brands fa-whatsapp"></i> <span id="waOrderLabel1"></span>
