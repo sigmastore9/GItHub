@@ -21,8 +21,8 @@
       "brand": "Hoco",
       "selling_price": 10000,
       "stock_quantity": 3,
-      "image_url": "/images/products/EQ33.jpg",
-      "updated_at": "2026-09-22 08:29:26"
+      "image_url": "/uploads/image-1790066036503-900124357.jpeg",
+      "updated_at": "2026-09-22 08:33:56"
     },
     {
       "id": 30,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-22T08:33:46.903Z"
+  "updated_at": "2026-09-22T08:33:59.558Z"
 }
