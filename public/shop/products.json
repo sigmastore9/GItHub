@@ -84,11 +84,11 @@
       "name": "لاصق شاشة 2 طبقة ضد الكسر",
       "model": "جوكر",
       "category": "حماية ولواصق شاشة",
-      "brand": "#",
+      "brand": "Weva",
       "selling_price": 2000,
       "stock_quantity": 76,
       "image_url": "/uploads/image-1790065648435-855898169.jpeg",
-      "updated_at": "2026-09-22 08:39:45"
+      "updated_at": "2026-09-22 08:43:36"
     },
     {
       "id": 24,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-22T08:43:09.427Z"
+  "updated_at": "2026-09-22T08:43:39.037Z"
 }
