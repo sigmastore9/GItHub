@@ -6,12 +6,12 @@
       "id": 32,
       "name": "ماوس لاسكلي",
       "model": "M150",
-      "category": "سماعات",
+      "category": "أخرى",
       "brand": "Hoco",
       "selling_price": 5000,
       "stock_quantity": 2,
       "image_url": "/images/products/EQ33.jpg",
-      "updated_at": "2026-09-22 08:32:24"
+      "updated_at": "2026-09-22 08:32:45"
     },
     {
       "id": 31,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-22T08:32:27.266Z"
+  "updated_at": "2026-09-22T08:32:48.851Z"
 }
