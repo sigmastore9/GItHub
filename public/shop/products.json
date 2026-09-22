@@ -32,8 +32,8 @@
       "brand": "Marshall",
       "selling_price": 13000,
       "stock_quantity": 4,
-      "image_url": "/uploads/image-1788547463361-211010805.jpg",
-      "updated_at": "2026-09-19 06:46:13"
+      "image_url": "/uploads/image-1790064489284-567519444.jpeg",
+      "updated_at": "2026-09-22 08:08:09"
     },
     {
       "id": 27,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-22T07:00:52.571Z"
+  "updated_at": "2026-09-22T08:08:12.334Z"
 }
