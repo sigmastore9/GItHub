@@ -65,8 +65,8 @@
       "brand": "Diamond",
       "selling_price": 2000,
       "stock_quantity": 76,
-      "image_url": "/uploads/brand-img-1788596354388-451.jpg",
-      "updated_at": "2026-09-22 07:00:49"
+      "image_url": "/uploads/image-1790065648435-855898169.jpeg",
+      "updated_at": "2026-09-22 08:27:28"
     },
     {
       "id": 24,
@@ -326,5 +326,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-22T08:27:07.598Z"
+  "updated_at": "2026-09-22T08:27:31.475Z"
 }
