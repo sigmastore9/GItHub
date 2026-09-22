@@ -7,11 +7,11 @@
       "name": "ماوس لاسكلي",
       "model": "M150",
       "category": "أخرى",
-      "brand": "Hoco",
+      "brand": "Logitech",
       "selling_price": 5000,
       "stock_quantity": 2,
       "image_url": "/uploads/image-1790066045518-566243458.jpeg",
-      "updated_at": "2026-09-22 08:34:05"
+      "updated_at": "2026-09-22 08:35:05"
     },
     {
       "id": 31,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-22T08:34:08.582Z"
+  "updated_at": "2026-09-22T08:35:08.919Z"
 }
