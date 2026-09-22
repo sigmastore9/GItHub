@@ -18,11 +18,11 @@
       "name": "كيبورد و ماوس mini",
       "model": "KIT",
       "category": "أخرى",
-      "brand": "Hoco",
+      "brand": "#",
       "selling_price": 10000,
       "stock_quantity": 3,
       "image_url": "/uploads/image-1790066036503-900124357.jpeg",
-      "updated_at": "2026-09-22 08:33:56"
+      "updated_at": "2026-09-22 08:35:35"
     },
     {
       "id": 30,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-22T08:35:08.919Z"
+  "updated_at": "2026-09-22T08:35:38.821Z"
 }
