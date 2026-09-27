@@ -273,9 +273,9 @@
       "category": "شواحن",
       "brand": "Hoco",
       "selling_price": 13000,
-      "stock_quantity": 2,
+      "stock_quantity": 1,
       "image_url": "/uploads/image-1789748036406-929395845.webp",
-      "updated_at": "2026-09-19 06:48:29"
+      "updated_at": "2026-09-27 09:29:43"
     },
     {
       "id": 6,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-27T05:24:22.245Z"
+  "updated_at": "2026-09-27T09:29:46.947Z"
 }
