@@ -96,10 +96,10 @@
       "model": "X76 4IN1",
       "category": "كابلات",
       "brand": "Hoco",
-      "selling_price": 3000,
+      "selling_price": 5000,
       "stock_quantity": 5,
       "image_url": "/uploads/brand-img-1788547537455-419.jpg",
-      "updated_at": "2026-09-04 18:45:38"
+      "updated_at": "2026-09-28 10:52:33"
     },
     {
       "id": 23,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-28T10:50:11.073Z"
+  "updated_at": "2026-09-28T10:52:36.863Z"
 }
