@@ -218,9 +218,9 @@
       "category": "محولات وتوصيلات",
       "brand": "Hoco",
       "selling_price": 2000,
-      "stock_quantity": 5,
+      "stock_quantity": 4,
       "image_url": "/uploads/image-1789747930597-543157927.jpg",
-      "updated_at": "2026-09-19 06:49:21"
+      "updated_at": "2026-09-28 10:56:09"
     },
     {
       "id": 11,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-09-28T10:55:13.793Z"
+  "updated_at": "2026-09-28T10:56:12.075Z"
 }
