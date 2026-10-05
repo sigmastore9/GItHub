@@ -317,9 +317,9 @@
       "category": "سماعات",
       "brand": "Hoco",
       "selling_price": 3000,
-      "stock_quantity": 10,
+      "stock_quantity": 9,
       "image_url": "/uploads/image-1789748095241-849435246.png",
-      "updated_at": "2026-09-21 18:57:27"
+      "updated_at": "2026-10-05 16:04:05"
     },
     {
       "id": 2,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-10-04T10:42:41.799Z"
+  "updated_at": "2026-10-05T16:04:08.232Z"
 }
