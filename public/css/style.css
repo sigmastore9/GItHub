@@ -151,19 +151,20 @@ body {
   width: 42px;
   height: 42px;
   object-fit: contain;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 229, 255, 0.4);
-  box-shadow: 0 0 16px rgba(0, 229, 255, 0.3);
-  background: rgba(5, 10, 22, 0.9);
-  padding: 4px;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0;
   flex-shrink: 0;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.8)) drop-shadow(0 0 14px rgba(0, 229, 255, 0.4));
+  transition: transform 0.25s ease, filter 0.25s ease;
 }
 
 .sidebar-logo-img:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 10px rgba(0, 245, 255, 1)) drop-shadow(0 0 22px rgba(0, 229, 255, 0.7));
 }
 
 .brand-text-block {
