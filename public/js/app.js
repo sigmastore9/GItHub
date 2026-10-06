@@ -24,6 +24,7 @@ function broadcastLocalSync(data = {}) {
 
 const state = {
   activeTab: 'inventory',
+  profitPeriod: 'all',
   products: [],
   filteredProducts: [],
   selectedCategory: 'all',
@@ -106,6 +107,7 @@ function switchTab(tabId) {
   } else if (tabId === 'stats') {
     loadStats();
     loadRecentSales();
+    loadCopyEntries();
   } else if (tabId === 'invoices') {
     loadInvoicesList();
   }
@@ -208,20 +210,11 @@ async function loadStats() {
     // Tab 5: Dedicated Profit Section
     const masterProfitEl = document.getElementById('statMasterProfit');
     if (masterProfitEl) {
-      masterProfitEl.textContent = formatCurrency(stats.profit.totalNetProfit);
+      // "today" sub-line always shows today, whichever period is selected
       document.getElementById('statTodayProfit').textContent = formatCurrency(stats.profit.todayNetProfit);
-      
-      // 1. Product Sales Profit
-      document.getElementById('statSalesProfit').textContent = formatCurrency(stats.profit.salesProfit);
-      document.getElementById('statSalesRevenue').textContent = formatCurrency(stats.sales.all.total_sales_revenue);
-      
-      // 2. Hardware Repairs Profit & Losses
-      document.getElementById('statWorkshopProfit').textContent = formatCurrency(stats.profit.repairNetProfit);
-      document.getElementById('statWorkshopLoss').textContent = formatCurrency(stats.profit.repairLoss || 0);
-      
-      // 3. Software Profit
-      document.getElementById('statSoftwareProfit').textContent = formatCurrency(stats.profit.softwareProfit);
-      document.getElementById('statSoftwareRevenue').textContent = formatCurrency(stats.software.all.total_software_revenue);
+
+      // The five profit cards follow the selected period (all time / today / week / month)
+      loadProfitCards();
 
       // Inventory Values
       document.getElementById('statInventoryCost').textContent = formatCurrency(stats.inventory.total_inventory_cost_value);
@@ -254,6 +247,161 @@ async function loadStats() {
     }
   } catch (error) {
     console.error('Error loading stats:', error);
+  }
+}
+
+// ----------------------------------------------------------
+// PROFIT CARDS (filtered by period) + PHOTOCOPY ("استنساخ") ENTRIES
+// ----------------------------------------------------------
+const PROFIT_PERIOD_LABELS = { all: 'كل وقت', today: 'اليوم', week: 'آخر أسبوع', month: 'آخر شهر' };
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function formatDay(isoDate) {            // '2026-10-06' -> '2026/10/06'
+  return String(isoDate || '').replace(/-/g, '/');
+}
+
+async function loadProfitCards() {
+  const period = state.profitPeriod;
+  try {
+    const res = await fetch(`/api/profits?period=${encodeURIComponent(period)}`);
+    const d = await res.json();
+    if (!d.success) return;
+    // A slow answer for an earlier choice must not overwrite the one now selected
+    if (period !== state.profitPeriod) return;
+
+    setText('statMasterTitle', period === 'all'
+      ? 'إجمالي صافي الأرباح الكلية'
+      : `صافي الأرباح — ${PROFIT_PERIOD_LABELS[period]}`);
+    setText('statMasterProfit', formatCurrency(d.total));
+    const masterEl = document.getElementById('statMasterProfit');
+    if (masterEl) {
+      masterEl.classList.toggle('text-danger', d.total < 0);
+      masterEl.classList.toggle('text-success', d.total >= 0);
+    }
+
+    setText('statSalesProfit', formatCurrency(d.sales.profit));
+    setText('statSalesRevenue', formatCurrency(d.sales.revenue));
+    setText('statWorkshopProfit', formatCurrency(d.repairs.net));
+    setText('statWorkshopLoss', formatCurrency(d.repairs.loss));
+    setText('statSoftwareProfit', formatCurrency(d.software.profit));
+    setText('statSoftwareRevenue', formatCurrency(d.software.revenue));
+    setText('statCopyProfit', formatCurrency(d.copy.profit));
+    setText('statCopyCount', formatNumber(d.copy.count));
+
+    let rangeText = 'منذ بداية التسجيل حتى اليوم';
+    if (d.range) {
+      rangeText = d.range.from === d.range.to
+        ? `${PROFIT_PERIOD_LABELS[period]}: ${formatDay(d.range.to)}`
+        : `${PROFIT_PERIOD_LABELS[period]}: من ${formatDay(d.range.from)} إلى ${formatDay(d.range.to)}`;
+    }
+    setText('profitRangeLabel', rangeText);
+  } catch (error) {
+    console.error('Error loading profit cards:', error);
+  }
+}
+
+function setProfitPeriod(period) {
+  if (!PROFIT_PERIOD_LABELS[period]) return;
+  state.profitPeriod = period;
+  document.querySelectorAll('.profit-pill').forEach(b => b.classList.toggle('active', b.dataset.period === period));
+  loadProfitCards();
+}
+
+let copyEntryLocked = false;
+
+async function addCopyProfit(rawAmount) {
+  if (copyEntryLocked) return;
+  const amount = Math.round(Number(rawAmount));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showToast('أدخل مبلغاً صحيحاً أكبر من صفر', 'error');
+    return;
+  }
+
+  copyEntryLocked = true; // a quick double-tap must not record the same job twice
+  try {
+    const res = await fetch('/api/copy-profits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`تم تسجيل ربح استنساخ ${formatCurrency(amount)}`, 'success');
+      const input = document.getElementById('copyCustomAmount');
+      if (input) input.value = '';
+      loadCopyEntries();
+      loadStats(); // refreshes the header total and every profit card
+    } else {
+      showToast(data.message || 'تعذر تسجيل الربح', 'error');
+    }
+  } catch (error) {
+    showToast('فشل الاتصال بالخادم', 'error');
+  } finally {
+    setTimeout(() => { copyEntryLocked = false; }, 350);
+  }
+}
+
+function submitCustomCopyProfit() {
+  const input = document.getElementById('copyCustomAmount');
+  addCopyProfit(input ? input.value : '');
+}
+
+// SQLite's CURRENT_TIMESTAMP is UTC with no zone marker, which a browser would read as local time
+function parseDbTimestamp(value) {
+  const s = String(value || '');
+  return new Date(/[zZ]$|[+-]\d\d:\d\d$/.test(s) ? s : s.replace(' ', 'T') + 'Z');
+}
+
+async function loadCopyEntries() {
+  const list = document.getElementById('copyRecentList');
+  if (!list) return;
+  try {
+    const res = await fetch('/api/copy-profits?limit=8');
+    const data = await res.json();
+    if (!data.success) return;
+
+    setText('copyTodaySummary', data.today.count
+      ? `اليوم: ${formatNumber(data.today.count)} عملية — ${formatCurrency(data.today.total)}`
+      : 'لا توجد تسجيلات اليوم بعد');
+
+    if (!data.entries.length) {
+      list.innerHTML = '<div class="copy-recent-empty">لا توجد تسجيلات بعد</div>';
+      return;
+    }
+
+    list.innerHTML = data.entries.map(e => {
+      const when = parseDbTimestamp(e.created_at)
+        .toLocaleString('ar-IQ', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return `
+        <div class="copy-recent-row">
+          <strong>${formatCurrency(e.amount)}</strong>
+          <span class="text-muted">${when}</span>
+          <button class="copy-del-btn" title="حذف هذا التسجيل" onclick="deleteCopyEntry(${Number(e.id)})"><i class="fa-solid fa-xmark"></i></button>
+        </div>`;
+    }).join('');
+  } catch (error) {
+    console.error('Error loading copy entries:', error);
+  }
+}
+
+async function deleteCopyEntry(id) {
+  if (!confirm('حذف هذا التسجيل من أرباح الاستنساخ؟')) return;
+  try {
+    const res = await fetch(`/api/copy-profits/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('تم حذف التسجيل', 'success');
+      loadCopyEntries();
+      loadStats();
+    } else {
+      showToast(data.message || 'تعذر الحذف', 'error');
+    }
+  } catch (error) {
+    showToast('فشل الاتصال بالخادم', 'error');
   }
 }
 

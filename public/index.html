@@ -12,7 +12,7 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <!-- Custom Styles -->
-  <link rel="stylesheet" href="css/style.css?v=2.2.0">
+  <link rel="stylesheet" href="css/style.css?v=2.3.0">
 </head>
 <body>
   <div id="app" class="app-container">
@@ -653,15 +653,27 @@
       <!-- TAB 5: DEDICATED PROFITS & FINANCIAL REPORTS -->
       <!-- ============================================== -->
       <section id="tab-stats" class="tab-content">
-        <!-- Master Profits 4-Cards Grid -->
+        <!-- Period filter: applies to every profit card below -->
+        <div class="profit-filter-bar">
+          <div class="profit-filter-label"><i class="fa-solid fa-filter"></i> عرض الأرباح:</div>
+          <div class="profit-filter-pills" role="group" aria-label="فترة عرض الأرباح">
+            <button class="profit-pill active" data-period="all" onclick="setProfitPeriod('all')">كل وقت</button>
+            <button class="profit-pill" data-period="today" onclick="setProfitPeriod('today')">اليوم</button>
+            <button class="profit-pill" data-period="week" onclick="setProfitPeriod('week')" title="آخر 7 أيام شاملةً اليوم">آخر أسبوع</button>
+            <button class="profit-pill" data-period="month" onclick="setProfitPeriod('month')" title="آخر 30 يوماً شاملةً اليوم">آخر شهر</button>
+          </div>
+          <div class="profit-filter-range" id="profitRangeLabel">منذ بداية التسجيل حتى اليوم</div>
+        </div>
+
+        <!-- Master Profits 5-Cards Grid -->
         <div class="stats-overview-grid">
           <!-- 1. Master Total Net Profit -->
           <div class="analytics-card profit-master">
             <div class="analytics-header">
               <div class="analytics-icon"><i class="fa-solid fa-money-bill-trend-up"></i></div>
               <div>
-                <h4>إجمالي صافي الأرباح الكلية</h4>
-                <p>مبيعات المنتجات + صيانة الهاردوير + خدمات السوفت وير</p>
+                <h4 id="statMasterTitle">إجمالي صافي الأرباح الكلية</h4>
+                <p>مبيعات المنتجات + صيانة الهاردوير + خدمات السوفت وير + الاستنساخ</p>
               </div>
             </div>
             <div class="analytics-value text-success" id="statMasterProfit">0 د.ع</div>
@@ -712,6 +724,48 @@
             <div class="analytics-value" id="statSoftwareProfit">0 د.ع</div>
             <div class="analytics-sub">
               <span>إجمالي المقبوض: <b id="statSoftwareRevenue">0 د.ع</b></span>
+            </div>
+          </div>
+
+          <!-- 5. Photocopy / printing profit -->
+          <div class="analytics-card">
+            <div class="analytics-header">
+              <div class="analytics-icon icon-orange"><i class="fa-solid fa-print"></i></div>
+              <div>
+                <h4>أرباح الاستنساخ</h4>
+                <p>استنساخ وطباعة (تسجيل يدوي)</p>
+              </div>
+            </div>
+            <div class="analytics-value" id="statCopyProfit">0 د.ع</div>
+            <div class="analytics-sub">
+              <span>عدد العمليات: <b id="statCopyCount">0</b></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick entry: one tap per photocopy / printing job -->
+        <div class="card copy-entry-panel">
+          <div class="copy-entry-head">
+            <h3><i class="fa-solid fa-print"></i> تسجيل أرباح الاستنساخ</h3>
+            <span class="text-muted">اضغط على المبلغ عند كل عملية استنساخ أو طباعة</span>
+            <span class="copy-today-summary" id="copyTodaySummary"></span>
+          </div>
+          <div class="copy-entry-layout">
+            <div>
+              <div class="copy-quick-buttons">
+                <button class="copy-amount-btn" onclick="addCopyProfit(250)">250<small>د.ع</small></button>
+                <button class="copy-amount-btn" onclick="addCopyProfit(500)">500<small>د.ع</small></button>
+                <button class="copy-amount-btn" onclick="addCopyProfit(1000)">1,000<small>د.ع</small></button>
+              </div>
+              <div class="copy-custom">
+                <input type="number" id="copyCustomAmount" class="form-input" min="1" step="250"
+                       placeholder="مبلغ آخر (د.ع)" onkeydown="if(event.key==='Enter'){submitCustomCopyProfit();}">
+                <button class="btn btn-primary" onclick="submitCustomCopyProfit()"><i class="fa-solid fa-plus"></i> تسجيل</button>
+              </div>
+            </div>
+            <div class="copy-recent">
+              <div class="copy-recent-title">آخر التسجيلات</div>
+              <div id="copyRecentList"><div class="copy-recent-empty">جاري التحميل...</div></div>
             </div>
           </div>
         </div>
@@ -1546,6 +1600,6 @@
   </div>
 
   <!-- Application Scripts -->
-  <script src="js/app.js?v=2.2.0"></script>
+  <script src="js/app.js?v=2.3.0"></script>
 </body>
 </html>

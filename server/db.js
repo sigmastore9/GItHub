@@ -175,6 +175,15 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_debts_customer ON debts(customer_name);
     CREATE INDEX IF NOT EXISTS idx_debts_status ON debts(status);
     CREATE INDEX IF NOT EXISTS idx_debt_payments_debt_id ON debt_payments(debt_id);
+
+    -- Photocopy / printing ("استنساخ") income: many tiny jobs (250, 500, 1000 ...)
+    -- that are entered by hand as a profit amount, one row per job.
+    CREATE TABLE IF NOT EXISTS copy_profits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      amount REAL NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_copy_profits_created ON copy_profits(created_at);
   `);
 
   // Auto-migrate new columns if missing in existing DB

@@ -1827,8 +1827,17 @@ app.get('/api/stats', (req, res) => {
     `).get();
 
     // 5. Overall Net Profit
-    const totalNetProfit = (salesAll.total_sales_profit || 0) + netRepairProfit + (softwareAll.total_software_profit || 0);
-    const todayNetProfit = (salesToday.today_sales_profit || 0) + (repairsToday.today_repair_profit || 0) + (softwareToday.today_software_profit || 0);
+    // 4b. Photocopy / printing profits, entered by hand
+    const copyAll = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS profit, COUNT(*) AS count FROM copy_profits
+    `).get();
+    const copyToday = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS profit, COUNT(*) AS count FROM copy_profits
+      WHERE date(created_at, 'localtime') = date('now', 'localtime')
+    `).get();
+
+    const totalNetProfit = (salesAll.total_sales_profit || 0) + netRepairProfit + (softwareAll.total_software_profit || 0) + copyAll.profit;
+    const todayNetProfit = (salesToday.today_sales_profit || 0) + (repairsToday.today_repair_profit || 0) + (softwareToday.today_software_profit || 0) + copyToday.profit;
 
     // 6. Low stock alerts
     const threshold = parseInt(getSetting('low_stock_threshold') || '2', 10);
@@ -1899,7 +1908,8 @@ app.get('/api/stats', (req, res) => {
           repairNetProfit: netRepairProfit,
           repairGrossProfit: repairsAll.total_repair_profit || 0,
           repairLoss: repairsAll.total_repair_loss || 0,
-          softwareProfit: softwareAll.total_software_profit || 0
+          softwareProfit: softwareAll.total_software_profit || 0,
+          copyProfit: copyAll.profit
         },
         stockAlerts: {
           lowStock: lowStockCount,
@@ -1913,6 +1923,143 @@ app.get('/api/stats', (req, res) => {
   } catch (error) {
     console.error('Error fetching stats:', error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==========================================
+// PROFITS BY PERIOD + PHOTOCOPY ("استنساخ") PROFIT ENTRIES
+// ==========================================
+
+// "Last week" and "last month" are rolling windows counted in whole calendar days
+// that END TODAY, so they cover 7 and 30 days including today. The numbers come from
+// this fixed table, never from the request, so they are safe to put into SQL.
+const PROFIT_PERIODS = {
+  all:   { label: 'كل وقت',    daysBack: null },
+  today: { label: 'اليوم',     daysBack: 0 },
+  week:  { label: 'آخر أسبوع', daysBack: 6 },
+  month: { label: 'آخر شهر',   daysBack: 29 }
+};
+
+// A repair only earns when it is handed over, so it is dated by that moment
+const REPAIR_EVENT_DATE = 'COALESCE(delivered_at, completed_at, received_at)';
+
+function periodCondition(period, column) {
+  const p = PROFIT_PERIODS[period];
+  if (!p || p.daysBack === null) return '1 = 1';
+  const day = `date(${column}, 'localtime')`;
+  return p.daysBack === 0
+    ? `${day} = date('now', 'localtime')`
+    : `${day} >= date('now', 'localtime', '-${p.daysBack} days')`;
+}
+
+function profitSummary(period) {
+  const sales = db.prepare(`
+    SELECT COALESCE(SUM(profit), 0) AS profit,
+           COALESCE(SUM(total_amount), 0) AS revenue,
+           COUNT(*) AS count
+    FROM sales WHERE ${periodCondition(period, 'created_at')}
+  `).get();
+
+  const repairs = db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN status IN ('ready', 'delivered') THEN profit ELSE 0 END), 0) AS gross_profit,
+           COALESCE(SUM(CASE WHEN status = 'unrepaired' THEN loss_cost ELSE 0 END), 0) AS loss,
+           COALESCE(SUM(CASE WHEN status IN ('ready', 'delivered') THEN total_charge ELSE 0 END), 0) AS revenue
+    FROM repairs WHERE ${periodCondition(period, REPAIR_EVENT_DATE)}
+  `).get();
+
+  const software = db.prepare(`
+    SELECT COALESCE(SUM(profit), 0) AS profit,
+           COALESCE(SUM(total_charge), 0) AS revenue,
+           COUNT(*) AS count
+    FROM software_services WHERE ${periodCondition(period, 'created_at')}
+  `).get();
+
+  const copy = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS profit, COUNT(*) AS count
+    FROM copy_profits WHERE ${periodCondition(period, 'created_at')}
+  `).get();
+
+  const repairNet = repairs.gross_profit - repairs.loss;
+  return {
+    sales,
+    repairs: { ...repairs, net: repairNet },
+    software,
+    copy,
+    total: sales.profit + repairNet + software.profit + copy.profit
+  };
+}
+
+app.get('/api/profits', (req, res) => {
+  try {
+    const period = String(req.query.period || 'all');
+    const def = PROFIT_PERIODS[period];
+    if (!def) {
+      return res.status(400).json({ success: false, message: 'فترة العرض غير معروفة' });
+    }
+
+    let range = null;
+    if (def.daysBack !== null) {
+      const r = db.prepare(`SELECT date('now', 'localtime', ?) AS from_date, date('now', 'localtime') AS to_date`)
+        .get(`-${def.daysBack} days`);
+      range = { from: r.from_date, to: r.to_date };
+    }
+
+    res.json({ success: true, period, label: def.label, range, ...profitSummary(period) });
+  } catch (error) {
+    console.error('Error computing profit summary:', error);
+    res.status(500).json({ success: false, message: 'تعذر حساب الأرباح' });
+  }
+});
+
+// Upper bound is only a guard against a typo with extra zeros; no real job is near it
+const COPY_PROFIT_MAX = 10000000;
+
+app.post('/api/copy-profits', (req, res) => {
+  try {
+    const raw = req.body ? req.body.amount : undefined;
+    const numeric = typeof raw === 'number' || (typeof raw === 'string' && raw.trim() !== '');
+    const amount = numeric ? Math.round(Number(raw)) : NaN;
+
+    if (!Number.isFinite(amount) || amount <= 0 || amount > COPY_PROFIT_MAX) {
+      return res.status(400).json({ success: false, message: 'أدخل مبلغاً صحيحاً أكبر من صفر' });
+    }
+
+    const result = db.prepare('INSERT INTO copy_profits (amount) VALUES (?)').run(amount);
+    res.json({
+      success: true,
+      id: Number(result.lastInsertRowid),
+      amount,
+      message: `تم تسجيل ربح استنساخ بقيمة ${amount.toLocaleString('en-US')} د.ع`
+    });
+  } catch (error) {
+    console.error('Error recording copy profit:', error);
+    res.status(500).json({ success: false, message: 'تعذر تسجيل الربح' });
+  }
+});
+
+app.get('/api/copy-profits', (req, res) => {
+  try {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 8));
+    const entries = db.prepare('SELECT id, amount, created_at FROM copy_profits ORDER BY id DESC LIMIT ?').all(limit);
+    const today = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM copy_profits
+      WHERE date(created_at, 'localtime') = date('now', 'localtime')
+    `).get();
+    res.json({ success: true, entries, today });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'تعذر قراءة السجل' });
+  }
+});
+
+app.delete('/api/copy-profits/:id', (req, res) => {
+  try {
+    const result = db.prepare('DELETE FROM copy_profits WHERE id = ?').run(req.params.id);
+    if (result.changes === 0) {
+      return res.status(404).json({ success: false, message: 'التسجيل غير موجود' });
+    }
+    res.json({ success: true, message: 'تم حذف التسجيل' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'تعذر الحذف' });
   }
 });
 
