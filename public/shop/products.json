@@ -140,10 +140,10 @@
       "model": "X117 IP - TC",
       "category": "كابلات",
       "brand": "Hoco",
-      "selling_price": 2750,
+      "selling_price": 3000,
       "stock_quantity": 5,
       "image_url": "/uploads/image-1788547636507-200861366.jpg",
-      "updated_at": "2026-09-04 18:47:16"
+      "updated_at": "2026-10-06 05:24:37"
     },
     {
       "id": 18,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-10-05T16:04:08.232Z"
+  "updated_at": "2026-10-06T05:24:40.090Z"
 }
