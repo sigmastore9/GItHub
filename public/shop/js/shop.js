@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCartFromStorage();
   loadShopProducts();
   initLiveSync();
+
+  // Last, and guarded: a problem here must never stop the products from loading
+  try { applySocialDeepLinks(); } catch (e) { console.warn('social deep links skipped:', e); }
 });
 
 // Telegram notifications are dispatched by the server when the order is saved.
@@ -109,6 +112,34 @@ async function loadStoreSettings() {
       }
     }
   } catch (e) {}
+}
+
+// Social profile links. A plain https profile URL is a universal/app link, which iOS and
+// most Android setups already pass to the installed app. On Android Chromium browsers
+// (Chrome, Brave, Edge, Samsung) we go one step further with an intent:// URL that names
+// the app's package, so the app opens directly and, if it is not installed, the browser
+// falls back to the https page. Other platforms keep the plain link untouched.
+const SOCIAL_APPS = {
+  instagram: { pkg: 'com.instagram.android', host: 'instagram.com', path: h => `/_u/${h}/` },
+  tiktok:    { pkg: 'com.zhiliaoapp.musically', host: 'www.tiktok.com', path: h => `/@${h}` }
+};
+
+function applySocialDeepLinks(userAgent = navigator.userAgent) {
+  const androidChromium = /Android/i.test(userAgent) && userAgent.includes('Chrome/');
+  document.querySelectorAll('[data-social]').forEach(a => {
+    const app = SOCIAL_APPS[a.dataset.social];
+    const handle = a.dataset.handle;
+    if (!app || !handle) return;
+
+    // Remember the web URL the first time, so calling this twice never nests intents
+    if (!a.dataset.webUrl) a.dataset.webUrl = a.getAttribute('href');
+    if (!androidChromium) { a.setAttribute('href', a.dataset.webUrl); return; }
+
+    const fallback = encodeURIComponent(a.dataset.webUrl);
+    a.setAttribute('href',
+      `intent://${app.host}${app.path(handle)}#Intent;package=${app.pkg};scheme=https;S.browser_fallback_url=${fallback};end`);
+    a.removeAttribute('target'); // let the OS hand off instead of opening a blank tab first
+  });
 }
 
 // Splits a settings string like "07830860919 - 07835046817" into clean numbers.

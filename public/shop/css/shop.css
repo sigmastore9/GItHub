@@ -1065,6 +1065,47 @@ body {
 }
 .footer-whatsapp-link:hover { text-decoration: underline; }
 .footer-whatsapp-sep { color: var(--text-muted); }
+
+/* Social profiles */
+.footer-social-label { margin-top: 10px; }
+.footer-social-label strong { color: #e2e8f0; letter-spacing: 0.2px; }
+.footer-social-row { gap: 10px; }
+.social-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.social-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.08); }
+.social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 15px;
+}
+/* Instagram's brand gradient */
+.social-instagram .social-icon {
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+}
+.social-instagram:hover { border-color: #dc2743; }
+/* TikTok's black badge with its cyan/pink offset glow */
+.social-tiktok .social-icon {
+  background: #010101;
+  text-shadow: -1.5px -1px 0 #25f4ee, 1.5px 1px 0 #fe2c55;
+}
+.social-tiktok:hover { border-color: #25f4ee; }
 .footer-bottom {
   border-top: 1px solid rgba(255, 255, 255, 0.04);
   padding: 14px 0;

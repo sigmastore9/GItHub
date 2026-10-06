@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <!-- Storefront CSS -->
-  <link rel="stylesheet" href="css/shop.css?v=2.5.0">
+  <link rel="stylesheet" href="css/shop.css?v=2.6.0">
 </head>
 <body>
 
@@ -407,7 +407,7 @@
     <div class="container footer-inner">
       <div class="footer-col">
         <div class="shop-logo mb-2">
-          <img src="/shop/images/logo.png" alt="Sigma Store Logo" class="logo-icon" style="width:34px; height:34px; object-fit:contain; border-radius:6px; border:1px solid rgba(0,229,255,0.4); margin-left:6px;">
+          <img src="images/logo.png" alt="Sigma Store Logo" class="logo-icon" style="width:34px; height:34px; object-fit:contain; border-radius:6px; border:1px solid rgba(0,229,255,0.4); margin-left:6px;">
           <span class="brand-title">SIGMA STORE</span>
         </div>
         <p class="text-muted">مركز SIGMA STORE المتكامل: صيانة هواتف متقدمة، ملحقات وإكسسوارات أصلية، استنساخ وطباعة، وأحدث الأجهزة الإلكترونية بأعلى معايير الجودة والكفالة.</p>
@@ -445,6 +445,27 @@
             <a href="https://wa.me/9647835046817" target="_blank" rel="noopener" class="footer-whatsapp-link">07835046817</a>
           </div>
           <div><i class="fa-solid fa-clock text-blue"></i> يومياً: 7:30 صباحاً - 11:00 مساءً</div>
+
+          <!-- One shared username on both platforms. The href is the plain https profile
+               URL (a universal/app link: iOS and most Android setups hand it to the
+               installed app). applySocialDeepLinks() in shop.js upgrades it on Android
+               to an intent:// link that targets the app directly. -->
+          <div class="footer-social-label">
+            <i class="fa-solid fa-share-nodes text-blue"></i> تابعنا على إنستغرام وتيك توك:
+            <strong dir="ltr">sigma_storemobile</strong>
+          </div>
+          <div class="footer-social-row">
+            <a href="https://www.instagram.com/sigma_storemobile/" target="_blank" rel="noopener"
+               class="social-btn social-instagram" data-social="instagram" data-handle="sigma_storemobile"
+               aria-label="إنستغرام Sigma Store">
+              <span class="social-icon"><i class="fa-brands fa-instagram"></i></span> Instagram
+            </a>
+            <a href="https://www.tiktok.com/@sigma_storemobile" target="_blank" rel="noopener"
+               class="social-btn social-tiktok" data-social="tiktok" data-handle="sigma_storemobile"
+               aria-label="تيك توك Sigma Store">
+              <span class="social-icon"><i class="fa-brands fa-tiktok"></i></span> TikTok
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -483,6 +504,6 @@
   <div id="shopToastContainer" class="shop-toast-container"></div>
 
   <!-- Storefront Scripts -->
-  <script src="js/shop.js?v=2.5.0"></script>
+  <script src="js/shop.js?v=2.6.0"></script>
 </body>
 </html>
