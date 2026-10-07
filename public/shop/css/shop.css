@@ -291,78 +291,107 @@ body {
 .cart-title { font-size: 10px; opacity: 0.85; }
 .cart-amount { font-size: 12px; font-weight: 800; }
 
-/* Hero Section */
+/* Hero Section — compact card: text + store pages on one side, the printed poster on the other */
 .hero-section {
-  padding: 24px 0 10px 0;
+  padding: 16px 0 6px 0;
 }
 .hero-card {
-  background: linear-gradient(135deg, #0f192d, #12203a);
-  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(0, 229, 255, 0.10), transparent 55%),
+    linear-gradient(135deg, rgba(12, 24, 44, 0.98), rgba(7, 14, 27, 0.99));
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   border-radius: var(--radius-lg);
-  padding: 30px 38px;
+  padding: 18px 26px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 26px;
 }
 .hero-content {
   flex: 1;
-  max-width: 680px;
+  max-width: 640px;
 }
 .hero-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(56, 189, 248, 0.1);
-  color: var(--accent-blue);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  padding: 3px 12px;
+  background: rgba(0, 229, 255, 0.10);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.30);
+  padding: 2px 11px;
   border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .hero-card h1 {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
-  margin-bottom: 10px;
-  color: white;
-  line-height: 1.4;
+  margin-bottom: 6px;
+  line-height: 1.35;
+  background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 55%, #00e5ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .hero-card p {
   color: var(--text-muted);
-  font-size: 14px;
-  margin-bottom: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 12px;
 }
 .hero-features {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 .feat-item {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
-  padding: 5px 12px;
-  border-radius: var(--radius-sm);
+  padding: 4px 11px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 600;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   color: #e2e8f0;
 }
-.feat-item i { color: var(--accent-blue); }
+.feat-item i { color: #00e5ff; }
+
+/* Store pages (Instagram / TikTok) */
+.feat-social {
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.feat-social:hover { transform: translateY(-1px); }
+.feat-social:active { transform: scale(0.97); }
+.feat-instagram { border-color: rgba(244, 114, 182, 0.45); background: rgba(244, 114, 182, 0.08); }
+.feat-instagram i { color: #f472b6; }
+.feat-instagram:hover { border-color: #f472b6; background: rgba(244, 114, 182, 0.16); }
+.feat-tiktok { border-color: rgba(37, 244, 238, 0.45); background: rgba(37, 244, 238, 0.07); }
+.feat-tiktok i { color: #25f4ee; text-shadow: 1.5px 1.5px 0 rgba(254, 44, 85, 0.9); }
+.feat-tiktok:hover { border-color: #25f4ee; background: rgba(37, 244, 238, 0.15); }
+
 .hero-visual {
-  width: 220px;
-  height: 200px;
+  flex: 0 0 auto;
+  width: 250px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .hero-img {
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 229, 255, 0.30);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55), 0 0 22px rgba(0, 229, 255, 0.10);
 }
 
 /* Category Navigation Pills */
@@ -1260,46 +1289,55 @@ body {
     border-radius: 20px;
   }
 
-  /* Compact Mobile Hero Banner */
+  /* Compact Mobile Hero Banner: poster strip on top, text and store pages below */
   .hero-section {
-    padding: 8px 0;
+    padding: 8px 0 2px;
   }
   .hero-card {
-    padding: 14px 16px;
-    border-radius: 12px;
-    flex-direction: column;
+    padding: 10px;
+    border-radius: 16px;
+    flex-direction: column-reverse;
+    align-items: stretch;
     text-align: right;
-    gap: 8px;
+    gap: 10px;
+  }
+  .hero-content {
+    max-width: none;
+    padding: 0 4px 2px;
   }
   .hero-visual {
-    display: none; /* Hide heavy image on mobile to save vertical space */
+    width: 100%;
+  }
+  .hero-img {
+    aspect-ratio: 5 / 2;
+    object-position: 50% 30%;
+    border-radius: 12px;
   }
   .hero-badge {
     font-size: 10px;
-    padding: 2px 8px;
+    padding: 2px 9px;
     margin-bottom: 6px;
   }
   .hero-card h1 {
     font-size: 17px;
-    line-height: 1.35;
-    margin-bottom: 6px;
+    line-height: 1.4;
+    margin-bottom: 5px;
   }
   .hero-card p {
-    font-size: 12px;
-    margin-bottom: 10px;
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    display: none; /* the service chips below already say the same thing */
+  }
+  .hero-card h1 {
+    margin-bottom: 8px;
   }
   .hero-features {
     gap: 6px;
   }
   .feat-item {
-    font-size: 10px;
-    padding: 3px 8px;
-    border-radius: 6px;
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+  .feat-social {
+    padding: 5px 12px;
   }
 
   /* Sticky Category Pills Navigation */

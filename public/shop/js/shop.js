@@ -285,7 +285,6 @@ async function loadShopProducts(isSilent = false) {
       // Prices and stock may have moved since the cart was saved
       reconcileCartWithCatalogue();
       applyShopFilters(isSilent);
-      syncHeroBanner(data.products);
     } else {
       if (!isSilent) empty.style.display = 'block';
     }
@@ -402,54 +401,6 @@ function renderShopProductsGrid(isSilent = false) {
   // If silent update, show subtle live sync indicator
   if (isSilent) {
     showLiveSyncPill();
-  }
-}
-
-// Synchronize Hero Banner Image with the Products database dynamically
-function syncHeroBanner(products) {
-  const heroImg = document.getElementById('heroShowcaseImg');
-  if (!heroImg) return;
-
-  const prods = products || shopState.products || [];
-  if (prods.length === 0) return;
-
-  // Look for EQ33 (the hero product featured in banner) or first product
-  const heroProduct = prods.find(p => 
-    (p.model && p.model.toUpperCase().includes('EQ33')) ||
-    (p.name && p.name.includes('EQ33'))
-  ) || prods[0];
-
-  if (heroProduct && heroProduct.image_url) {
-    // Append updated_at / timestamp for immediate cache-busting
-    const v = heroProduct.updated_at ? encodeURIComponent(heroProduct.updated_at) : Date.now();
-    const rawSrc = heroProduct.image_url.includes('?') 
-      ? heroProduct.image_url 
-      : `${heroProduct.image_url}?v=${v}`;
-    const imgSrc = resolveAssetUrl(rawSrc);
-
-    if (heroImg.getAttribute('data-current-src') !== imgSrc) {
-      heroImg.setAttribute('data-current-src', imgSrc);
-      
-      // Smooth fade transition
-      heroImg.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-      heroImg.style.opacity = '0.3';
-      
-      const tempImg = new Image();
-      tempImg.onload = () => {
-        heroImg.src = imgSrc;
-        heroImg.alt = heroProduct.name || 'إعلان منتج Sigma Store';
-        heroImg.style.opacity = '1';
-      };
-      tempImg.onerror = () => {
-        heroImg.src = resolveAssetUrl('/images/products/EQ33.jpg');
-        heroImg.style.opacity = '1';
-      };
-      tempImg.src = imgSrc;
-
-      heroImg.style.cursor = 'pointer';
-      heroImg.title = `اضغط لمعاينة وتفاصيل ${heroProduct.name || heroProduct.model}`;
-      heroImg.onclick = () => openQuickView(heroProduct.id);
-    }
   }
 }
 
