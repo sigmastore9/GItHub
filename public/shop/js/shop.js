@@ -2,6 +2,10 @@
 // SIGMA STORE - CUSTOMER E-COMMERCE FRONTEND (SHOP.JS)
 // ==========================================================
 
+// Cloudflare Worker that forwards new orders to Telegram (see tools/telegram-worker).
+// Leave empty to disable. The bot token lives only inside the Worker.
+const ORDER_RELAY_URL = 'https://sigma-orders.geminitest299.workers.dev';
+
 const shopState = {
   products: [],
   filteredProducts: [],
@@ -937,6 +941,23 @@ function closeCheckoutModal() {
   document.getElementById('checkoutModal').style.display = 'none';
 }
 
+// Best effort: never throws and never holds the checkout for more than 5 seconds.
+async function relayOrderToTelegram(payload) {
+  if (!ORDER_RELAY_URL) return;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 5000);
+    await fetch(ORDER_RELAY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctl.signal,
+      keepalive: true
+    });
+    clearTimeout(timer);
+  } catch (_) { /* the customer still gets the WhatsApp buttons */ }
+}
+
 async function submitCustomerOrder(event) {
   event.preventDefault();
 
@@ -1019,11 +1040,13 @@ async function submitCustomerOrder(event) {
       }
     } catch (_) {
       // No real backend reachable (static hosting, or a genuine network error):
-      // fall through to the WhatsApp/Telegram notification path below.
+      // the Express server never saw this order, so it has sent no Telegram alert.
+      // Hand the order to the relay instead; WhatsApp below stays as the fallback.
+      await relayOrderToTelegram(payload);
     }
 
-    // 2. The server sends the Telegram alert when it saves the order, so the bot
-    // token stays on the server and out of this file.
+    // 2. When the Express server took the order it sent the Telegram alert itself;
+    // otherwise the relay above did. The bot token is never in this file.
 
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-check"></i> تأكيد وإرسال الطلب';
