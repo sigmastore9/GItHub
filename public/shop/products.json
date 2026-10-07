@@ -86,9 +86,9 @@
       "category": "حماية ولواصق شاشة",
       "brand": "Weva",
       "selling_price": 2000,
-      "stock_quantity": 75,
+      "stock_quantity": 74,
       "image_url": "/uploads/image-1790065648435-855898169.jpeg",
-      "updated_at": "2026-09-27 05:23:41"
+      "updated_at": "2026-10-07 07:41:49"
     },
     {
       "id": 24,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-10-07T07:10:38.649Z"
+  "updated_at": "2026-10-07T07:41:52.709Z"
 }
