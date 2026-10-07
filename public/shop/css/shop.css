@@ -377,21 +377,21 @@ body {
 .feat-tiktok i { color: #25f4ee; text-shadow: 1.5px 1.5px 0 rgba(254, 44, 85, 0.9); }
 .feat-tiktok:hover { border-color: #25f4ee; background: rgba(37, 244, 238, 0.15); }
 
+/* The store emblem sits alone at the edge of the card */
 .hero-visual {
   flex: 0 0 auto;
-  width: 250px;
+  width: 96px;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-inline-end: 8px;
 }
 .hero-img {
   width: 100%;
   height: auto;
-  aspect-ratio: 3 / 2;
-  object-fit: cover;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 229, 255, 0.30);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55), 0 0 22px rgba(0, 229, 255, 0.10);
+  object-fit: contain;
+  background: transparent;
+  filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.75)) drop-shadow(0 0 22px rgba(0, 229, 255, 0.35));
 }
 
 /* Category Navigation Pills */
@@ -1294,10 +1294,10 @@ body {
     padding: 8px 0 2px;
   }
   .hero-card {
-    padding: 10px;
+    padding: 12px 14px;
     border-radius: 16px;
-    flex-direction: column-reverse;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
     text-align: right;
     gap: 10px;
   }
@@ -1306,12 +1306,8 @@ body {
     padding: 0 4px 2px;
   }
   .hero-visual {
-    width: 100%;
-  }
-  .hero-img {
-    aspect-ratio: 5 / 2;
-    object-position: 50% 30%;
-    border-radius: 12px;
+    width: 54px;
+    margin-inline-end: 0;
   }
   .hero-badge {
     font-size: 10px;
