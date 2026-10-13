@@ -185,9 +185,9 @@
       "category": "كابلات",
       "brand": "Marshall",
       "selling_price": 4500,
-      "stock_quantity": 5,
+      "stock_quantity": 4,
       "image_url": "/uploads/image-1790064522444-23007688.jpeg",
-      "updated_at": "2026-09-22 08:08:42"
+      "updated_at": "2026-10-13 14:13:33"
     },
     {
       "id": 14,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-10-13T07:27:20.124Z"
+  "updated_at": "2026-10-13T14:13:36.890Z"
 }
