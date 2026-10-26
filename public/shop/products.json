@@ -31,9 +31,9 @@
       "category": "كابلات",
       "brand": "Hoco",
       "selling_price": 4000,
-      "stock_quantity": 9,
+      "stock_quantity": 10,
       "image_url": "/uploads/image-1788455574553-65504827.jpg",
-      "updated_at": "2026-10-26 09:33:49"
+      "updated_at": "2026-10-26 09:34:44"
     },
     {
       "id": 29,
@@ -348,5 +348,5 @@
     "store_name": "Sigma Store",
     "phone": "07830860919 - 07835046817"
   },
-  "updated_at": "2026-10-26T09:33:52.492Z"
+  "updated_at": "2026-10-26T09:34:47.911Z"
 }
